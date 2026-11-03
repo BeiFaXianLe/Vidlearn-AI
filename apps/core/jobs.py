@@ -119,6 +119,36 @@ class JobStore:
         with self._lock:
             return list(self._jobs.values())[-limit:]
 
+    def delete(self, job_id: str) -> bool:
+        """删除单个任务（内存 + 持久化）。返回是否删除成功。"""
+        with self._lock:
+            existed = self._jobs.pop(job_id, None) is not None
+            if self._conn is not None:
+                try:
+                    with self._db_lock:
+                        self._conn.execute("DELETE FROM jobs WHERE id=?", (job_id,))
+                        self._conn.commit()
+                except Exception:
+                    pass
+            return existed
+
+    def delete_many(self, job_ids: list[str]) -> int:
+        """批量删除任务，返回删除数量。"""
+        n = 0
+        with self._lock:
+            for jid in job_ids:
+                if self._jobs.pop(jid, None) is not None:
+                    n += 1
+            if self._conn is not None:
+                try:
+                    with self._db_lock:
+                        self._conn.executemany("DELETE FROM jobs WHERE id=?",
+                                               [(jid,) for jid in job_ids])
+                        self._conn.commit()
+                except Exception:
+                    pass
+        return n
+
     def prune(self, keep: int = 100) -> None:
         with self._lock:
             if len(self._jobs) <= keep:

@@ -176,3 +176,26 @@ def test_reimport_starts_task(client, monkeypatch):
     assert body["ok"] is True and body["task_id"]
     d = client.get(f"/api/tasks/{body['task_id']}").json()
     assert d["payload"]["source"] == url
+
+
+def test_jobstore_delete_and_batch():
+    from apps.core.jobs import JobStore
+    js = JobStore()
+    a = js.create()
+    b = js.create()
+    c = js.create()
+    assert js.delete(a) is True
+    assert js.get(a) is None
+    assert js.delete_many([b, c]) == 2
+    assert js.get(b) is None and js.get(c) is None
+
+
+def test_task_delete_api(client):
+    js = client.app.state.jobs
+    jid = js.create(stage="x")
+    assert client.delete(f"/api/tasks/{jid}").status_code == 200
+    assert client.get(f"/api/tasks/{jid}").status_code == 404
+    j2 = js.create()
+    j3 = js.create()
+    r = client.post("/api/tasks/batch-delete", json={"ids": [j2, j3]})
+    assert r.status_code == 200 and r.json()["deleted"] == 2

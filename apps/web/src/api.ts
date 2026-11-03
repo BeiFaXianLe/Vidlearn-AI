@@ -209,6 +209,15 @@ export const api = {
   async taskControl(taskId: string, action: "pause" | "resume" | "cancel" | "retry") {
     return j<any>(await fetch(`${BASE}/api/tasks/${taskId}/${action}`, { method: "POST" }));
   },
+  async taskDelete(taskId: string) {
+    return j<any>(await fetch(`${BASE}/api/tasks/${taskId}`, { method: "DELETE" }));
+  },
+  async tasksBatchDelete(ids: string[]) {
+    return j<any>(await fetch(`${BASE}/api/tasks/batch-delete`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    }));
+  },
   async tasks(limit = 20) {
     return j<any>(await fetch(`${BASE}/api/tasks?limit=${limit}`));
   },

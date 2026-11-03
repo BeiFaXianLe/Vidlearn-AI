@@ -1880,6 +1880,7 @@ function TasksPage({ tasks, loadTasks, onOpenVideo, show }: {
   show: (m: string) => void;
 }) {
   const [filter, setFilter] = useState<"all" | "active" | "done" | "failed">("all");
+  const [sel, setSel] = useState<string[]>([]);
   const isDone = (t: any) => t.status === "done";
   const isFailed = (t: any) => t.status === "error" || t.status === "failed";
   const isCancelled = (t: any) => t.status === "cancelled" || t.control === "cancelled";
@@ -1909,6 +1910,43 @@ function TasksPage({ tasks, loadTasks, onOpenVideo, show }: {
       show(({ pause: "已暂停", resume: "已继续", cancel: "已取消", retry: "已重新排队" } as any)[action]);
     } catch (e: any) {
       show("操作失败: " + e.message);
+    }
+  }
+
+  // 只有「终态」任务可删除（运行/排队/暂停需先取消，避免删了又被写回）
+  const selectable = (t: any) => isDone(t) || isFailed(t) || isCancelled(t);
+  const toggleSel = (id: string) =>
+    setSel((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const selectableInList = list.filter(selectable).map((t) => t.id);
+  const allSelected = selectableInList.length > 0 && selectableInList.every((id) => sel.includes(id));
+  function toggleSelectAll() {
+    if (allSelected) setSel((prev) => prev.filter((id) => !selectableInList.includes(id)));
+    else setSel((prev) => Array.from(new Set([...prev, ...selectableInList])));
+  }
+
+  async function deleteOne(t: any) {
+    if (!selectable(t)) return show("请先暂停或取消该任务，再删除");
+    if (!confirm(`删除任务「${nameOf(t)}」？仅从任务列表移除，不影响已入库视频。`)) return;
+    try {
+      await api.taskDelete(t.id);
+      setSel((prev) => prev.filter((x) => x !== t.id));
+      await loadTasks();
+      show("已删除任务");
+    } catch (e: any) {
+      show("删除失败: " + e.message);
+    }
+  }
+
+  async function deleteSelected() {
+    if (!sel.length) return;
+    if (!confirm(`确定删除选中的 ${sel.length} 个任务？仅从任务列表移除，不影响已入库视频。`)) return;
+    try {
+      const r = await api.tasksBatchDelete(sel);
+      setSel([]);
+      await loadTasks();
+      show(`已删除 ${r.deleted ?? sel.length} 个任务`);
+    } catch (e: any) {
+      show("批量删除失败: " + e.message);
     }
   }
 
@@ -1962,7 +2000,17 @@ function TasksPage({ tasks, loadTasks, onOpenVideo, show }: {
 
       <div className="tasktable">
         <div className="tthead">
+          <label className="tsel-all" title="全选可删除的任务（已结束的）">
+            <input type="checkbox" checked={allSelected} disabled={selectableInList.length === 0} onChange={toggleSelectAll} />
+          </label>
           <h2>全部任务</h2>
+          {sel.length > 0 && (
+            <div className="tbulk">
+              <span>已选 {sel.length} 项</span>
+              <button className="btn soft danger" onClick={deleteSelected}>批量删除</button>
+              <button className="chip" onClick={() => setSel([])}>取消选择</button>
+            </div>
+          )}
           <div className="tfilters">
             {([["all", "全部"], ["active", "进行中"], ["done", "已完成"], ["failed", "失败"]] as const).map(([k, l]) => (
               <button key={k} className={"chip" + (filter === k ? " selected" : "")} onClick={() => setFilter(k as any)}>{l}</button>
@@ -1978,7 +2026,10 @@ function TasksPage({ tasks, loadTasks, onOpenVideo, show }: {
             const [ic, glyph] = iconOf(t);
             const nm = nameOf(t);
             return (
-              <div key={t.id} className={"task-row " + st.cls}>
+              <div key={t.id} className={"task-row " + st.cls + (sel.includes(t.id) ? " picked" : "")}>
+                <label className="task-check" title={selectable(t) ? "选择" : "运行中的任务请先取消"}>
+                  <input type="checkbox" checked={sel.includes(t.id)} disabled={!selectable(t)} onChange={() => toggleSel(t.id)} />
+                </label>
                 <div className={"ttype " + ic}>{glyph}</div>
                 <div className="rmain">
                   <div className="rname" title={nm}>{nm}</div>
@@ -2007,6 +2058,7 @@ function TasksPage({ tasks, loadTasks, onOpenVideo, show }: {
                   {!isDone(t) && !isCancelled(t) && (
                     <button className="tbtn" onClick={() => act(t.id, "cancel")}>取消</button>
                   )}
+                  <button className="tbtn danger" disabled={!selectable(t)} title={selectable(t) ? "删除任务" : "请先暂停/取消"} onClick={() => deleteOne(t)}>删除</button>
                 </div>
               </div>
             );

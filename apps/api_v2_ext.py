@@ -226,6 +226,25 @@ def task_cancel(task_id: str, request: Request):
     return {"ok": True, "task": j}
 
 
+@router.delete("/tasks/{task_id}")
+def task_delete(task_id: str, request: Request):
+    j = request.app.state.jobs.get(task_id)
+    if not j:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    request.app.state.jobs.delete(task_id)
+    return {"ok": True}
+
+
+class BatchDelIn(BaseModel):
+    ids: list[str]
+
+
+@router.post("/tasks/batch-delete")
+def tasks_batch_delete(body: BatchDelIn, request: Request):
+    n = request.app.state.jobs.delete_many(body.ids or [])
+    return {"ok": True, "deleted": n}
+
+
 @router.post("/tasks/{task_id}/retry")
 async def task_retry(task_id: str, request: Request):
     """重试：用原任务参数重新跑一遍。"""

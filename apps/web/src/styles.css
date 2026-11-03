@@ -338,3 +338,14 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0;backgro
 .im-divider{font-size:12px;font-weight:700;color:#8791a5;margin:16px 0 8px}
 .im-foot{display:flex;align-items:center;gap:10px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
 .im-stage{flex:1;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+
+/* ===== 任务选择与删除 ===== */
+.tsel-all{display:flex;align-items:center;flex:none}
+.tsel-all input,.task-check input{width:16px;height:16px;margin:0;cursor:pointer}
+.task-check{display:flex;align-items:center;flex:none}
+.tbulk{display:flex;align-items:center;gap:10px;font-size:12.5px;color:#3c4a63;background:#eef1ff;border-radius:10px;padding:4px 10px;margin-left:8px}
+.tbulk .btn.soft.danger{color:#c33;background:#fff0f0;border-color:#f3cccc}
+.tbtn.danger{color:#c33;border-color:#f1cccc}
+.tbtn.danger:hover{background:#fff6f6}
+.tbtn:disabled{opacity:.4;cursor:not-allowed}
+.task-row.picked{background:#f6f8ff}
