@@ -32,6 +32,16 @@ run.cmd             # 双击；默认 http://127.0.0.1:8000
 
 > PowerShell 提示"未数字签名"是执行策略限制，用 `setup.cmd` / `run.cmd` 即可绕过，无需改系统策略。
 
+**Linux / macOS：**
+
+```bash
+bash deploy/setup.sh      # 建 venv、装依赖、构建前端
+bash deploy/run.sh        # 默认 http://127.0.0.1:8000
+```
+
+也支持 **systemd 常驻**与 **Docker**，以及 Nginx（含 SSE 流式/视频 Range 配置）：
+见 [docs/v2/DEPLOY_LINUX.md](docs/v2/DEPLOY_LINUX.md)。
+
 ---
 
 ## 2. 目录结构（代码 / 数据 / 模型 分离）
@@ -156,6 +166,9 @@ VidLearn AI/
 - **密钥不入库**：.env（含 API Key）、data/（含 DPAPI 加密的 Cookie、日志、数据库）、
   models/、.venv/、.tmp/、jieba.cache 等均已被 .gitignore 排除；仓库只含源码与文档。
   克隆后请复制 .env.example 为 .env 并填入自己的 Key。
+- **跨平台**：Windows 用 DPAPI 加密 Cookie，Linux/macOS 用 Fernet（密钥 0600）。
+  从 Windows 迁移到 Linux 后需**重新登录一次**（DPAPI 密文不可跨系统解密），见 [DEPLOY_LINUX.md](docs/v2/DEPLOY_LINUX.md)。
+- **部署**：Windows 脚本 setup.cmd/run.cmd；Linux deploy/*.sh + systemd + Docker + Nginx 示例。
 - **合规**：仅处理你有权获取的内容；不绕过 DRM/会员/验证码/反爬；云端 AI 只接收文本。
 
 ---

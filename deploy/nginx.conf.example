@@ -1,0 +1,59 @@
+# VidLearn AI — Nginx 反向代理示例
+# 放到 /etc/nginx/sites-available/vidlearn 并软链到 sites-enabled
+# 注意：/api/videos/{id}/qa 是 SSE 流式接口，必须关闭缓冲
+
+upstream vidlearn_app {
+    server 127.0.0.1:8000;
+    keepalive 16;
+}
+
+server {
+    listen 80;
+    server_name vidlearn.example.com;   # 改成你的域名
+
+    # 大文件上传（本地视频/字幕）
+    client_max_body_size 8G;
+    client_body_timeout 3600s;
+
+    # 视频 Range 播放：不要缓存整文件
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Range $http_range;
+    proxy_set_header If-Range $http_if_range;
+
+    # 静态前端 + API（同一上游）
+    location / {
+        proxy_pass http://vidlearn_app;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_buffering off;
+    }
+
+    # 视频流：长连接 + 不缓冲
+    location ~ ^/api/videos/[^/]+/media {
+        proxy_pass http://vidlearn_app;
+        proxy_buffering off;
+        proxy_read_timeout 3600s;
+        proxy_max_temp_file_size 0;
+    }
+
+    # AI 问答 SSE：必须禁用缓冲，否则前端收不到流式增量
+    location ~ ^/api/videos/[^/]+/qa {
+        proxy_pass http://vidlearn_app;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_set_header Connection "";
+        chunked_transfer_encoding on;
+        proxy_read_timeout 3600s;
+    }
+
+    # 长任务（下载/ASR/分析）轮询与提交
+    location /api/ {
+        proxy_pass http://vidlearn_app;
+        proxy_buffering off;
+        proxy_read_timeout 3600s;
+    }
+}

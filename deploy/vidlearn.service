@@ -1,0 +1,30 @@
+[Unit]
+Description=VidLearn AI (local-first video learning workstation)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 修改为你的实际安装目录与运行用户
+WorkingDirectory=/opt/vidlearn
+User=vidlearn
+Group=vidlearn
+Environment=PYTHONUTF8=1
+Environment=PYTHONIOENCODING=utf-8
+EnvironmentFile=-/opt/vidlearn/.env
+# 若用项目内模型，取消下一行注释
+# Environment=VIDLEARN_ASR_MODEL_DIR=/opt/vidlearn/models/faster-whisper-small
+ExecStart=/opt/vidlearn/.venv/bin/python -m uvicorn apps.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=3
+# 资源与安全加固
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/opt/vidlearn/data
+LimitNOFILE=65536
+# 长视频转码/ASR 需要较多内存，可按需调整
+MemoryMax=4G
+
+[Install]
+WantedBy=multi-user.target

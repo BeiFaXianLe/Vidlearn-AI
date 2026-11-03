@@ -90,13 +90,77 @@ class _Dpapi:
 
 # ---------------- 文件后端 ----------------
 
+class _Fernet:
+    """POSIX 平台加密后端：cryptography.Fernet（AES128-CBC + HMAC）。
+
+    密钥文件放在凭证目录下（0600），只允许当前用户读取。
+    未安装 cryptography 时 available=False，调用方退化为内存态。
+    """
+
+    def __init__(self, key_dir: Path) -> None:
+        try:
+            from cryptography.fernet import Fernet  # type: ignore
+        except Exception:
+            self.available = False
+            self._f = None
+            return
+        self.available = True
+        self._fernet_cls = Fernet
+        key_dir = Path(key_dir)
+        try:
+            key_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            self.available = False
+            self._f = None
+            return
+        key_path = key_dir / ".secret.key"
+        try:
+            if key_path.exists():
+                key = key_path.read_bytes().strip()
+            else:
+                key = Fernet.generate_key()
+                key_path.write_bytes(key)
+                _restrict_permissions(key_path)
+        except OSError:
+            self.available = False
+            self._f = None
+            return
+        try:
+            self._f = Fernet(key)
+        except Exception:
+            self.available = False
+            self._f = None
+
+    def protect(self, data: bytes, entropy: bytes = b"") -> bytes:
+        return self._f.encrypt(data)
+
+    def unprotect(self, data: bytes, entropy: bytes = b"") -> bytes:
+        return self._f.decrypt(data)
+
+
 class FileCredentialProvider:
-    """凭证提供者：DPAPI 加密落盘；非 Windows 时仅内存 + 告警。"""
+    """凭证提供者。
+
+    - Windows：DPAPI（用户绑定，绑定当前 Windows 账户）
+    - Linux/macOS：Fernet（密钥文件 0600，仅当前用户可读）
+    - 两者都不可用：仅内存（重启丢失，并给出告警）
+    """
 
     def __init__(self, store_dir: Path) -> None:
         self._dir = Path(store_dir)
         self._dir.mkdir(parents=True, exist_ok=True)
         self._dpapi = _Dpapi()
+        if self._dpapi.available:
+            self._cipher = self._dpapi
+            self._backend = "dpapi"
+        else:
+            fernet = _Fernet(self._dir)
+            if fernet.available:
+                self._cipher = fernet
+                self._backend = "fernet"
+            else:
+                self._cipher = None
+                self._backend = "memory-only"
         self._memory: dict[str, dict[str, str]] = {}
 
     def _path(self, platform: str) -> Path:
@@ -108,9 +172,9 @@ class FileCredentialProvider:
         if not cookies:
             raise CredentialError("无法解析 Cookie：请粘贴 'k=v; k2=v2' 或 SESSDATA 值")
         self._memory[platform] = cookies
-        if self._dpapi.available:
+        if self._cipher is not None:
             payload = json.dumps(cookies, ensure_ascii=False).encode("utf-8")
-            enc = self._dpapi.protect(payload)
+            enc = self._cipher.protect(payload)
             p = self._path(platform)
             p.write_bytes(base64.b64encode(enc))
             _restrict_permissions(p)
@@ -121,10 +185,13 @@ class FileCredentialProvider:
         p = self._path(platform)
         if not p.exists():
             return None
-        if not self._dpapi.available:
+        if self._cipher is None:
             return None
-        enc = base64.b64decode(p.read_bytes())
-        return dict(json.loads(self._dpapi.unprotect(enc).decode("utf-8")))
+        try:
+            enc = base64.b64decode(p.read_bytes())
+            return dict(json.loads(self._cipher.unprotect(enc).decode("utf-8")))
+        except Exception:
+            return None
 
     def clear(self, platform: str) -> None:
         self._memory.pop(platform, None)
@@ -133,13 +200,13 @@ class FileCredentialProvider:
             p.unlink()
 
     def status(self, platform: str) -> str:
-        if self._dpapi.available:
+        if self._cipher is not None:
             return "valid" if self._path(platform).exists() else "missing"
         return "valid" if platform in self._memory else "missing"
 
     @property
     def backend(self) -> str:
-        return "dpapi" if self._dpapi.available else "memory-only"
+        return self._backend
 
 
 # ---------------- 工具函数 ----------------
@@ -183,8 +250,13 @@ def _safe_name(s: str) -> str:
 
 
 def _restrict_permissions(path: Path) -> None:
-    """仅当前用户可读（fail-open：失败时保持现有继承权限，不阻塞）。"""
+    """仅当前用户可读（fail-open）。Windows 用 icacls，POSIX 用 chmod 600。"""
     if sys.platform != "win32":
+        try:
+            import os as _os
+            _os.chmod(path, 0o600)
+        except OSError:
+            pass
         return
     try:
         import subprocess

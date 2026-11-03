@@ -23,6 +23,7 @@
 | [PUNCTUATION.md](PUNCTUATION.md) | 字幕标点恢复（LLM 派生轨） |
 | [UI_NOTES.md](UI_NOTES.md) | 前端 UI 结构与交互（对齐原型 V1.1） |
 | [V2_FEATURES.md](V2_FEATURES.md) | 磁盘/批量导入/收藏/任务控制/问答 |
+| [DEPLOY_LINUX.md](DEPLOY_LINUX.md) | **Linux 部署方案**（systemd / Docker / Nginx / 迁移） |
 
 ## 阶段交付报告
 | 阶段 | 报告 |
