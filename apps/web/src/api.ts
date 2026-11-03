@@ -204,6 +204,12 @@ export const api = {
   async tasks(limit = 20) {
     return j<any>(await fetch(`${BASE}/api/tasks?limit=${limit}`));
   },
+  async credentialStatus(platform = "bilibili") {
+    return j<any>(await fetch(`${BASE}/api/credentials/${platform}`));
+  },
+  async clearCredential(platform = "bilibili") {
+    return j<any>(await fetch(`${BASE}/api/credentials/${platform}`, { method: "DELETE" }));
+  },
   async setCredential(raw: string, platform = "bilibili") {
     return j<any>(
       await fetch(`${BASE}/api/credentials`, {

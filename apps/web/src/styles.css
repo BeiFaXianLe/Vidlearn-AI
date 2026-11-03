@@ -291,3 +291,10 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0;backgro
 .task-row.done .rstate{color:var(--green)} .task-row.failed .rstate{color:#c33} .task-row.paused .rstate{color:#8a94a6}
 .task-empty{padding:64px 20px;text-align:center;color:var(--muted);font-size:13px}
 @media(max-width:900px){.tstat-row{grid-template-columns:repeat(2,1fr)}.task-row{flex-wrap:wrap}.task-row .rprog{width:100%}}
+
+/* ===== 导入页 Cookie 管理 ===== */
+.cookiecard{border:1px solid #e3e6ee;border-radius:12px;padding:12px;margin:4px 0 12px;background:#fafbff}
+.ck-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ck-head b{font-size:13px;color:#2f3b52}
+.ck-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ck-actions .meta{font-size:11.5px}

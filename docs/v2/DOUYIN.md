@@ -31,3 +31,6 @@ https://www.douyin.com/video/7345678901234567890
 ## 测试
 - 单元测试 `tests/test_douyin.py`（mock yt-dlp/ffprobe）：路由、链接提取、probe 解析、错误分级、下载产物、Cookie 落盘受控
 - 真实链接联调：需提供一条可访问的抖音链接（部分需 Cookie）
+
+## 导入页 Cookie 管理（UI）
+导入弹窗已内置「平台 Cookie」卡片：B站 / 抖音 分页签、各自粘贴与保存、显示「已保存/未配置」、一键清除；粘贴抖音链接会自动切到抖音页签。保存走 \POST /api/credentials {platform, raw}\（加密落盘），仅本机可读。

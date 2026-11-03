@@ -1277,7 +1277,9 @@ function Detail({ id, onBack, show }: { id: string; onBack: () => void; show: (m
 function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: () => void; show: (m: string) => void }) {
   const [text, setText] = useState("");
   const [maxHeight, setMaxHeight] = useState<number | "">("");
-  const [cookie, setCookie] = useState("");
+  const [cookies, setCookies] = useState<{ bilibili: string; douyin: string }>({ bilibili: "", douyin: "" });
+  const [credSt, setCredSt] = useState<{ bilibili: any; douyin: any }>({ bilibili: null, douyin: null });
+  const [cookieTab, setCookieTab] = useState<"bilibili" | "douyin">("bilibili");
   const [autoAsr, setAutoAsr] = useState(true);
   const [autoPunct, setAutoPunct] = useState(true);
   const [bg, setBg] = useState(true);
@@ -1295,11 +1297,54 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
   const [favPage, setFavPage] = useState(1);
   const [favHasMore, setFavHasMore] = useState(false);
 
+  useEffect(() => {
+    (async () => {
+      for (const pf of ["bilibili", "douyin"] as const) {
+        try {
+          const r = await api.credentialStatus(pf);
+          setCredSt((s) => ({ ...s, [pf]: r }));
+        } catch {}
+      }
+    })();
+  }, []);
+
+  // 粘贴链接后自动切到对应平台的 Cookie 页签
+  useEffect(() => {
+    const j = text.toLowerCase();
+    if (j.includes("douyin.com")) setCookieTab("douyin");
+    else if (j.includes("bilibili.com") || /bv[0-9a-z]{10}/i.test(j)) setCookieTab("bilibili");
+  }, [text]);
+
+  async function saveCookie(pf: "bilibili" | "douyin") {
+    const raw = cookies[pf].trim();
+    if (!raw) return show("请先粘贴 Cookie");
+    try {
+      await api.setCredential(raw, pf);
+      const r = await api.credentialStatus(pf);
+      setCredSt((s) => ({ ...s, [pf]: r }));
+      show((pf === "bilibili" ? "B站" : "抖音") + " Cookie 已加密保存");
+    } catch (e: any) {
+      show("保存失败: " + e.message);
+    }
+  }
+
+  async function clearCookie(pf: "bilibili" | "douyin") {
+    try {
+      await api.clearCredential(pf);
+      setCookies((s) => ({ ...s, [pf]: "" }));
+      const r = await api.credentialStatus(pf);
+      setCredSt((s) => ({ ...s, [pf]: r }));
+      show("已清除");
+    } catch (e: any) {
+      show("清除失败: " + e.message);
+    }
+  }
+
   async function loadFavFolders() {
-    if (!cookie.trim()) return show("请先在上方粘贴 B站 Cookie（需含 SESSDATA）");
+    if (!cookies.bilibili.trim()) return show("请先在「平台 Cookie → B站」粘贴含 SESSDATA 的 Cookie");
     setFavLoading(true);
     try {
-      await api.setCredential(cookie.trim());
+      await api.setCredential(cookies.bilibili.trim(), "bilibili");
       const r = await api.biliFavFolders();
       if (!r.ok) throw new Error(r.error?.message || "读取失败");
       setFavUser(r.uname || "");
@@ -1344,12 +1389,12 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
     if (list.length > 20) return show("单次最多 20 条，请分批导入");
     setBusy(true);
     try {
-      if (cookie.trim()) {
-        const joined = list.join(" ");
-        const onlyDouyin = /douyin\.com/i.test(joined) && !/bilibili\.com/i.test(joined);
-        await api.setCredential(cookie.trim(), onlyDouyin ? "douyin" : "bilibili");
-        show("Cookie 已加密保存");
+      let anyCookie = false;
+      for (const pf of ["bilibili", "douyin"] as const) {
+        const raw = cookies[pf].trim();
+        if (raw) { await api.setCredential(raw, pf); anyCookie = true; }
       }
+      if (anyCookie) show("Cookie 已加密保存");
       const opts: any = {
         max_height: maxHeight === "" ? undefined : maxHeight,
         auto_asr: autoAsr,
@@ -1401,14 +1446,42 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
             <option value={360}>360P</option>
           </select>
         </div>
-        <textarea
-          className="importarea"
-          style={{ minHeight: 60 }}
-          placeholder="（可选）B站粘贴 SESSDATA / 抖音粘贴 Cookie(ttwid、sessionid 等)，用于获取字幕或高清/绕过风控。仅本地加密保存，按来源自动区分平台。"
-          value={cookie}
-          disabled={busy}
-          onChange={(e) => setCookie(e.target.value)}
-        />
+        <div className="cookiecard">
+          <div className="ck-head">
+            <b>平台 Cookie</b>
+            <div className="chiprow" style={{ margin: 0 }}>
+              {(["bilibili", "douyin"] as const).map((pf) => (
+                <button key={pf} className={"chip" + (cookieTab === pf ? " active" : "")} onClick={() => setCookieTab(pf)}>
+                  {pf === "bilibili" ? "B站" : "抖音"}{credSt[pf]?.status === "valid" ? " ✓" : ""}
+                </button>
+              ))}
+            </div>
+            <span className="meta" style={{ marginLeft: "auto" }}>
+              {credSt[cookieTab]?.status === "valid" ? "已保存（加密）✓" : "未配置"}
+            </span>
+          </div>
+          <textarea
+            className="importarea"
+            style={{ minHeight: 56, margin: "6px 0" }}
+            placeholder={cookieTab === "bilibili"
+              ? "B站：粘贴 SESSDATA 或完整 Cookie（用于平台字幕 / 高清 / 收藏夹）"
+              : "抖音：粘贴完整 Cookie（含 ttwid、msToken、sessionid 等；抖音风控需要新鲜 Cookie）"}
+            value={cookies[cookieTab]}
+            disabled={busy}
+            onChange={(e) => setCookies((s) => ({ ...s, [cookieTab]: e.target.value }))}
+          />
+          <div className="ck-actions">
+            <button className="btn" disabled={busy} onClick={() => saveCookie(cookieTab)}>
+              保存{cookieTab === "bilibili" ? "B站" : "抖音"} Cookie
+            </button>
+            <button className="btn" disabled={busy} onClick={() => clearCookie(cookieTab)}>清除</button>
+            <span className="meta">
+              {cookieTab === "bilibili"
+                ? "提示：浏览器 F12 → Application → Cookies 复制 SESSDATA"
+                : "提示：先登录 douyin.com，F12 → Network 任一请求复制完整 Cookie"}
+            </span>
+          </div>
+        </div>
         <div style={{ border: "1px solid #e3e6ee", borderRadius: 10, padding: 10, marginBottom: 10 }}>
           <div className="meta" style={{ marginBottom: 8 }}>
             <b>从 B站收藏夹导入</b>　·　先粘贴含 SESSDATA 的 Cookie，再读取你的收藏夹
