@@ -1,0 +1,32 @@
+[
+  {
+    "file": "DeepSeek_Harness_Audit_Prompt_V1.1.md",
+    "size_bytes": 9490,
+    "sha256": "133ba8367c82abcb338b9aee9ced99e64b8d2b6e3600d62ead7479485d5e7990"
+  },
+  {
+    "file": "README.md",
+    "size_bytes": 1124,
+    "sha256": "7dd00a3388229bdff4903f94bbc22bac2cfe497988ce7948f041987f7e9dfe49"
+  },
+  {
+    "file": "VidLearn_AI_Change_Log.md",
+    "size_bytes": 3789,
+    "sha256": "ae66eb08e27880065935f0fee19f9aa8c4e779f513f466bf4a87318b73049a84"
+  },
+  {
+    "file": "VidLearn_AI_Development_Plan_V1.1.md",
+    "size_bytes": 11408,
+    "sha256": "1c5090c05ffccaea466a0779730af83d803e7c00a3580f0954012652f5d6c502"
+  },
+  {
+    "file": "VidLearn_AI_PRD_V1.1.md",
+    "size_bytes": 23383,
+    "sha256": "489f7142e19e29abc7f08cab6554b86cee710a950be3ec7c1dfa5c1fb6dca6f0"
+  },
+  {
+    "file": "VidLearn_AI_Prototype.html",
+    "size_bytes": 29774,
+    "sha256": "29df71d107bf03e684b3c93d9389969f1a57068ec955c01c24cd731f600b5585"
+  }
+]

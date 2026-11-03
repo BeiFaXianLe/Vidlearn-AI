@@ -1,0 +1,54 @@
+# 运行时数据与产物
+data/
+models/
+.venv/
+.tmp/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 前端依赖与构建
+apps/web/node_modules/
+apps/web/dist/
+
+# 本地配置/密钥
+.env
+*.cred
+
+pytest-of-*/
+.pytest_cache/
+
+data-gym-cache/
+jieba.cache
+.pnpm-store/
+vidlearn_test_data/
+# Cookie 临时文件（绝不提交）
+cookie_*.txt
+/tmp*.txt
+
+# ===== 密钥与凭证（强制不提交）=====
+.env
+.env.*
+!.env.example
+*.cred
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+cookie_*.txt
+
+# ===== 日志与本地数据库 =====
+*.log
+*.sqlite
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+
+# ===== 系统/编辑器垃圾 =====
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
