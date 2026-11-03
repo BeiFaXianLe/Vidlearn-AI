@@ -245,6 +245,9 @@ VidLearn AI/
 文档按版本分目录：
 - **当前基线 V2.0** → [docs/v2/README.md](docs/v2/README.md)
   - 需求与计划：[PRD_V2.0.md](docs/v2/PRD_V2.0.md) · [Development_Plan_V2.0.md](docs/v2/Development_Plan_V2.0.md)
+  - **部署**：[DEPLOY_LINUX.md](docs/v2/DEPLOY_LINUX.md)（Linux / Docker / systemd / Nginx / 迁移）
+  - 功能说明：[V2_FEATURES.md](docs/v2/V2_FEATURES.md) · [SUBTITLE_PIPELINE.md](docs/v2/SUBTITLE_PIPELINE.md) · [PUNCTUATION.md](docs/v2/PUNCTUATION.md) · [UI_NOTES.md](docs/v2/UI_NOTES.md)
+  - 工程规范：[DEPENDENCY_VERSIONS.md](docs/v2/DEPENDENCY_VERSIONS.md) · [INTERFACE_CONTRACTS.md](docs/v2/INTERFACE_CONTRACTS.md) · [KNOWN_RISKS.md](docs/v2/KNOWN_RISKS.md) · [MODEL_SETUP.md](docs/v2/MODEL_SETUP.md) · [LICENSE_AUDIT.md](docs/v2/LICENSE_AUDIT.md)
   - 阶段交付报告：`docs/v2/S0_…` ~ `docs/v2/S8_DELIVERY_REPORT.md`
 - **历史 V1** → [docs/v1/README.md](docs/v1/README.md)（含 V1.1 交付包与 HTML 原型）
 - 总索引：[docs/README.md](docs/README.md)
