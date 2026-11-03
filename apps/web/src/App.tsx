@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, askQa, fmtSize, fmtTime, mergeCues, type Video, type MediaAsset, type Segment, type Collection } from "./api";
 
-type View = { name: "home" } | { name: "detail"; id: string };
+type View = { name: "home" } | { name: "detail"; id: string } | { name: "tasks" };
 
 export default function App() {
   const [view, setView] = useState<View>({ name: "home" });
@@ -11,6 +11,7 @@ export default function App() {
   const [favMode, setFavMode] = useState(false);
   const [favCount, setFavCount] = useState(0);
   const [collections, setCollections] = useState<Collection[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
 
   const show = (m: string) => {
     setToast(m);
@@ -32,6 +33,26 @@ export default function App() {
   useEffect(() => {
     refresh();
   }, []);
+
+  // 后台任务：全局轮询（供侧边栏徽章 + 任务管理页使用）
+  const loadTasks = async () => {
+    try {
+      const r = await api.tasks(60);
+      setTasks(r.tasks || []);
+    } catch {}
+  };
+  useEffect(() => {
+    loadTasks();
+    const t = window.setInterval(loadTasks, 2500);
+    return () => window.clearInterval(t);
+  }, []);
+  const activeTaskCount = tasks.filter(
+    (t) => t.status === "running" || t.status === "queued" || t.status === "paused"
+  ).length;
+  const openTasks = () => {
+    setView({ name: "tasks" });
+    window.history.pushState({ name: "tasks" }, "");
+  };
 
   const openDetail = (id: string) => {
     window.history.pushState({ name: "detail", id }, "");
@@ -85,6 +106,14 @@ export default function App() {
           <span className="ico">◷</span>
           <span className="navtext">学习记录</span>
         </button>
+        <button
+          className={"nav" + (view.name === "tasks" ? " active" : "")}
+          onClick={openTasks}
+        >
+          <span className="ico">⇅</span>
+          <span className="navtext">任务管理</span>
+          {activeTaskCount > 0 && <span className="count">{activeTaskCount}</span>}
+        </button>
         <div className="navlabel">管理</div>
         <button className="nav" onClick={() => show("设置原型入口")}>
           <span className="ico">⚙</span>
@@ -104,7 +133,7 @@ export default function App() {
       <main className="main">
         <div className="topbar">
           <div className="crumb">
-            工作空间　/　<span>{view.name === "home" ? "视频首页" : "学习工作台"}</span>
+            工作空间　/　<span>{view.name === "home" ? "视频首页" : view.name === "tasks" ? "任务管理" : "学习工作台"}</span>
           </div>
           <div className="top-actions">
             <button className="btn primary" onClick={() => setImportOpen(true)}>
@@ -118,8 +147,17 @@ export default function App() {
             videos={videos}
             favMode={favMode}
             collections={collections}
+            activeTaskCount={activeTaskCount}
             onOpen={openDetail}
+            onOpenTasks={openTasks}
             onRefresh={refresh}
+            show={show}
+          />
+        ) : view.name === "tasks" ? (
+          <TasksPage
+            tasks={tasks}
+            loadTasks={loadTasks}
+            onOpenVideo={openDetail}
             show={show}
           />
         ) : (
@@ -146,14 +184,18 @@ function Home({
   videos,
   favMode,
   collections,
+  activeTaskCount,
   onOpen,
+  onOpenTasks,
   onRefresh,
   show,
 }: {
   videos: Video[];
   favMode: boolean;
   collections: Collection[];
+  activeTaskCount: number;
   onOpen: (id: string) => void;
+  onOpenTasks: () => void;
   onRefresh: () => void;
   show: (m: string) => void;
 }) {
@@ -162,7 +204,6 @@ function Home({
   const [activeCol, setActiveCol] = useState<string>("all");
   const [pickerVideo, setPickerVideo] = useState<Video | null>(null);
   const [storage, setStorage] = useState<any>(null);
-  const [tasks, setTasks] = useState<any[]>([]);
   const timerRef = useRef<number | null>(null);
 
   const colIds = (v: Video) => (v.collection_ids || "").split(",").filter(Boolean);
@@ -182,20 +223,9 @@ function Home({
       setStorage(await api.storage());
     } catch {}
   };
-  const loadTasks = async () => {
-    try {
-      const r = await api.tasks(30);
-      setTasks(r.tasks || []);
-    } catch {}
-  };
-
   useEffect(() => {
     loadStorage();
-    loadTasks();
-    timerRef.current = window.setInterval(async () => {
-      await loadTasks();
-      await loadStorage();
-    }, 2000);
+    timerRef.current = window.setInterval(loadStorage, 2000);
     return () => {
       if (timerRef.current) window.clearInterval(timerRef.current);
     };
@@ -205,7 +235,6 @@ function Home({
   const warnThreshold = storage ? storage.threshold : 85;
   const isWarn = storage ? storage.warn : false;
   const isDanger = storage ? storage.danger : false;
-  const activeTasks = tasks.filter((t) => t.status === "running" || t.status === "queued" || t.status === "paused");
 
   function openPicker(v: Video, e: React.MouseEvent) {
     e.stopPropagation();
@@ -220,17 +249,6 @@ function Home({
       await loadStorage();
       show(`告警阈值已调整为 ${next}%`);
     } catch {}
-  }
-
-  async function taskAction(id: string, action: "pause" | "resume" | "cancel" | "retry") {
-    try {
-      await api.taskControl(id, action);
-      await loadTasks();
-      const label = { pause: "已暂停", resume: "已继续", cancel: "已取消", retry: "已重新排队" }[action];
-      show(label);
-    } catch (e: any) {
-      show("操作失败: " + e.message);
-    }
   }
 
   const coverPalette = ["linear-gradient(130deg,#23415e,#6c8da7)", "linear-gradient(130deg,#392d66,#a47ec4)",
@@ -252,7 +270,7 @@ function Home({
         <div className="stat"><div className="label">已收录视频</div><strong>{videos.length}</strong><em>本地媒体库</em></div>
         <div className="stat"><div className="label">累计时长</div><strong>{totalMin}m</strong><em>本地保存</em></div>
         <div className="stat"><div className="label">字幕就绪</div><strong>{videos.filter((v) => v.transcript_status === "complete").length}</strong><em>可生成总结</em></div>
-        <div className="stat"><div className="label">待处理任务</div><strong>{activeTasks.length}</strong><em style={{ color: "var(--orange)" }}>{activeTasks.length ? "处理中" : "暂无排队"}</em></div>
+        <div className="stat clickable" onClick={onOpenTasks}><span className="goarrow">任务管理 →</span><div className="label">待处理任务</div><strong>{activeTaskCount}</strong><em style={{ color: "var(--orange)" }}>{activeTaskCount ? "处理中" : "暂无排队"}</em></div>
       </div>
 
       {storage && (
@@ -312,50 +330,6 @@ function Home({
         </div>
       )}
 
-      {tasks.length > 0 && (
-        <div className="taskpanel">
-          <div className="thead">
-            <h2>后台处理任务</h2>
-            <span className="muted">
-              {activeTasks.length ? `${activeTasks.length} 个进行中` : "全部完成"} · 共 {tasks.length} 个
-            </span>
-          </div>
-          {tasks.slice(0, 8).map((t) => {
-            const done = t.status === "done", failed = t.status === "error" || t.status === "failed";
-            const cancelled = t.status === "cancelled" || t.control === "cancelled";
-            const paused = !cancelled && !failed && (t.control === "paused" || t.status === "paused");
-            let label = done ? "已完成" : failed ? `失败：${t.error?.message || "未知原因"}` :
-              cancelled ? "已取消" : paused ? "已暂停" : `${t.stage || ""}`;
-            const name = t.title || t.result?.video?.title || t.payload?.source || t.payload?.source_url || "导入任务";
-            const progress = t.progress || 0;
-            return (
-              <div key={t.id} className={"task" + (done ? " done" : "") + (failed ? " failed" : "") + (paused ? " paused" : "")}>
-                <div className="tinfo">
-                  <div className="tname" title={name}>{name.length > 56 ? name.slice(0, 56) + "…" : name}</div>
-                  <div className="tstep">{label}</div>
-                </div>
-                <div className="tbar"><i style={{ width: `${done ? 100 : progress}%` }} /></div>
-                <div className="tstate">{done ? "完成" : failed ? "失败" : cancelled ? "取消" : paused ? "暂停" : `${progress}%`}</div>
-                <div className="tbtns">
-                  {!done && (failed || cancelled) && (
-                    <button className="tbtn warn" onClick={() => taskAction(t.id, "retry")}>重试</button>
-                  )}
-                  {!done && !cancelled && !failed && (
-                    paused ? (
-                      <button className="tbtn" onClick={() => taskAction(t.id, "resume")}>继续</button>
-                    ) : (
-                      <button className="tbtn" onClick={() => taskAction(t.id, "pause")}>暂停</button>
-                    )
-                  )}
-                  {!done && !cancelled && !failed && (
-                    <button className="tbtn" onClick={() => taskAction(t.id, "cancel")}>取消</button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
 
       {favMode && (
         <div className="chiprow" style={{ marginTop: 4 }}>
@@ -1723,6 +1697,150 @@ function GlossaryManager({ videoId, terms, onExtract, onRefresh, onClose, show }
         <div className="modalfoot" style={{ marginTop: 14 }}>
           <button className="btn primary" onClick={onClose}>完成</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function TasksPage({ tasks, loadTasks, onOpenVideo, show }: {
+  tasks: any[];
+  loadTasks: () => Promise<void>;
+  onOpenVideo: (id: string) => void;
+  show: (m: string) => void;
+}) {
+  const [filter, setFilter] = useState<"all" | "active" | "done" | "failed">("all");
+  const isDone = (t: any) => t.status === "done";
+  const isFailed = (t: any) => t.status === "error" || t.status === "failed";
+  const isCancelled = (t: any) => t.status === "cancelled" || t.control === "cancelled";
+  const isPaused = (t: any) => !isDone(t) && !isFailed(t) && !isCancelled(t) &&
+    (t.control === "paused" || t.status === "paused");
+  const isActive = (t: any) => t.status === "running" || t.status === "queued" || isPaused(t);
+  const nameOf = (t: any) =>
+    t.title || t.result?.video?.title || t.payload?.source || t.payload?.source_url || "导入任务";
+
+  const counts = {
+    running: tasks.filter((t) => t.status === "running").length,
+    queued: tasks.filter((t) => t.status === "queued").length,
+    done: tasks.filter(isDone).length,
+    failed: tasks.filter((t) => isFailed(t) || isPaused(t) || isCancelled(t)).length,
+  };
+  const list = tasks.filter((t) => {
+    if (filter === "active") return isActive(t);
+    if (filter === "done") return isDone(t);
+    if (filter === "failed") return isFailed(t) || isPaused(t) || isCancelled(t);
+    return true;
+  });
+
+  async function act(id: string, action: "pause" | "resume" | "cancel" | "retry") {
+    try {
+      await api.taskControl(id, action);
+      await loadTasks();
+      show(({ pause: "已暂停", resume: "已继续", cancel: "已取消", retry: "已重新排队" } as any)[action]);
+    } catch (e: any) {
+      show("操作失败: " + e.message);
+    }
+  }
+
+  function statusOf(t: any) {
+    if (isDone(t)) return { state: "完成", cls: "done", pct: 100 };
+    if (isFailed(t)) return { state: "失败", cls: "failed", pct: t.progress || 0 };
+    if (isCancelled(t)) return { state: "取消", cls: "paused", pct: t.progress || 0 };
+    if (isPaused(t)) return { state: "暂停", cls: "paused", pct: t.progress || 0 };
+    if (t.status === "queued") return { state: "排队", cls: "", pct: 0 };
+    return { state: `${t.progress || 0}%`, cls: "", pct: t.progress || 0 };
+  }
+  function iconOf(t: any): [string, string] {
+    if (isDone(t)) return ["ok", "✓"];
+    if (isFailed(t)) return ["bad", "!"];
+    const s = (t.stage || "").toLowerCase();
+    if (s.includes("总结") || s.includes("章节") || s.includes("分析")) return ["ai", "✨"];
+    if (s.includes("asr") || s.includes("字幕") || s.includes("转写") || s.includes("标点") || s.includes("校准")) return ["asr", "✎"];
+    return ["", "⬇"];
+  }
+
+  return (
+    <div>
+      <div className="pagehead">
+        <div>
+          <div className="eyebrow">TASK CENTER</div>
+          <h1>任务管理</h1>
+          <p className="sub">集中查看导入、转写、AI 处理、字幕校准等后台任务，可随时暂停、重试或取消。</p>
+        </div>
+        <div className="top-actions">
+          <button
+            className="btn"
+            onClick={async () => {
+              for (const t of tasks.filter((x) => x.status === "running")) {
+                try { await api.taskControl(t.id, "pause"); } catch {}
+              }
+              await loadTasks();
+              show("已暂停全部进行中任务");
+            }}
+          >
+            全部暂停
+          </button>
+        </div>
+      </div>
+
+      <div className="tstat-row">
+        <div className="tstat running"><div className="label">进行中</div><strong>{counts.running}</strong><em>正在处理</em></div>
+        <div className="tstat"><div className="label">排队等待</div><strong>{counts.queued}</strong><em>等待开始</em></div>
+        <div className="tstat done"><div className="label">已完成</div><strong>{counts.done}</strong><em>可去视频库查看</em></div>
+        <div className="tstat failed"><div className="label">失败 / 暂停</div><strong>{counts.failed}</strong><em>需要处理</em></div>
+      </div>
+
+      <div className="tasktable">
+        <div className="tthead">
+          <h2>全部任务</h2>
+          <div className="tfilters">
+            {([["all", "全部"], ["active", "进行中"], ["done", "已完成"], ["failed", "失败"]] as const).map(([k, l]) => (
+              <button key={k} className={"chip" + (filter === k ? " selected" : "")} onClick={() => setFilter(k as any)}>{l}</button>
+            ))}
+          </div>
+        </div>
+
+        {list.length === 0 ? (
+          <div className="task-empty">当前没有任务。去「导入视频」新建任务吧。</div>
+        ) : (
+          list.map((t) => {
+            const st = statusOf(t);
+            const [ic, glyph] = iconOf(t);
+            const nm = nameOf(t);
+            return (
+              <div key={t.id} className={"task-row " + st.cls}>
+                <div className={"ttype " + ic}>{glyph}</div>
+                <div className="rmain">
+                  <div className="rname" title={nm}>{nm}</div>
+                  <div className="rmeta">
+                    <span>{t.payload?.source || t.source_url || "本地 / 批量导入"}</span>
+                    <span>{t.stage || (t.status === "queued" ? "排队等待" : t.status)}</span>
+                  </div>
+                </div>
+                <div className="rprog">
+                  <div className="rbar"><i style={{ width: `${st.pct}%` }} /></div>
+                  <div className="rpct">{st.pct}%</div>
+                </div>
+                <div className="rstate">{st.state}</div>
+                <div className="tbtns">
+                  {isDone(t) && t.result?.video?.id && (
+                    <button className="tbtn" onClick={() => onOpenVideo(t.result.video.id)}>查看</button>
+                  )}
+                  {!isDone(t) && (isFailed(t) || isCancelled(t)) && (
+                    <button className="tbtn warn" onClick={() => act(t.id, "retry")}>重试</button>
+                  )}
+                  {!isDone(t) && !isFailed(t) && !isCancelled(t) && (
+                    isPaused(t)
+                      ? <button className="tbtn" onClick={() => act(t.id, "resume")}>继续</button>
+                      : <button className="tbtn" onClick={() => act(t.id, "pause")}>暂停</button>
+                  )}
+                  {!isDone(t) && !isCancelled(t) && (
+                    <button className="tbtn" onClick={() => act(t.id, "cancel")}>取消</button>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );

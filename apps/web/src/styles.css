@@ -252,3 +252,42 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0;backgro
 .gloss-item{display:flex;align-items:center;gap:9px;padding:9px 8px;border-bottom:1px solid #f1f3f7;font-size:13px;flex-wrap:wrap}
 .gloss-item:last-child{border:0}
 .gloss-item .tbtn{margin-left:auto}
+
+/* ===== 任务管理页 ===== */
+.stat.clickable{cursor:pointer;transition:.15s;position:relative}
+.stat.clickable:hover{border-color:#c7d0ff;box-shadow:0 10px 26px #536dfe22;transform:translateY(-1px)}
+.stat .goarrow{position:absolute;right:14px;top:14px;font-size:12px;color:var(--blue);font-weight:700;opacity:0;transition:.15s}
+.stat.clickable:hover .goarrow{opacity:1}
+.tstat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+.tstat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 18px;box-shadow:var(--shadow)}
+.tstat .label{color:var(--muted);font-size:12px}
+.tstat strong{display:block;font-size:23px;margin:4px 0 2px}
+.tstat em{font-style:normal;color:var(--muted);font-size:11px}
+.tstat.running strong{color:var(--blue)} .tstat.done strong{color:var(--green)} .tstat.failed strong{color:#e05c5c}
+.tasktable{background:#fff;border:1px solid var(--line);border-radius:15px;box-shadow:var(--shadow);overflow:hidden}
+.tasktable .tthead{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid #f1f3f7;flex-wrap:wrap}
+.tasktable .tthead h2{font-size:16px;margin:0}
+.tasktable .tfilters{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.task-row{display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid #f1f3f7}
+.task-row:last-child{border-bottom:0}
+.task-row .ttype{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-size:16px;flex:none;background:#eef1ff;color:#536dfe}
+.task-row .ttype.asr{background:#e6f7f6;color:#0f766e}
+.task-row .ttype.ai{background:#f3ecff;color:#7c3aed}
+.task-row .ttype.ok{background:#e8f7ee;color:#15803d}
+.task-row .ttype.bad{background:#ffecec;color:#c33}
+.task-row .rmain{flex:1;min-width:0}
+.task-row .rname{font-size:13.5px;font-weight:600;color:#2f3b52;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.task-row .rmeta{font-size:11.5px;color:var(--muted);margin-top:4px;display:flex;gap:10px;min-width:0}
+.task-row .rmeta span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.task-row .rmeta span:first-child{max-width:58%}
+.task-row .rprog{width:190px;flex:none}
+.task-row .rbar{height:6px;border-radius:4px;background:#eef1f7;overflow:hidden}
+.task-row .rbar i{display:block;height:100%;background:var(--blue);width:0;transition:width .45s}
+.task-row.done .rbar i{background:var(--green)}
+.task-row.failed .rbar i{background:#e05c5c}
+.task-row.paused .rbar i{background:#c3cad8}
+.task-row .rpct{font-size:11px;color:var(--muted);margin-top:4px;text-align:right;font-variant-numeric:tabular-nums}
+.task-row .rstate{width:74px;text-align:right;flex:none;font-size:11.5px;font-weight:700;color:var(--blue)}
+.task-row.done .rstate{color:var(--green)} .task-row.failed .rstate{color:#c33} .task-row.paused .rstate{color:#8a94a6}
+.task-empty{padding:64px 20px;text-align:center;color:var(--muted);font-size:13px}
+@media(max-width:900px){.tstat-row{grid-template-columns:repeat(2,1fr)}.task-row{flex-wrap:wrap}.task-row .rprog{width:100%}}
