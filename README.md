@@ -3,44 +3,111 @@
 以本地媒体库为基础的个人视频学习工作站：把 B 站视频或本地视频，转成可播放、可检索、可复习的知识资产。
 
 - **版本**：V2.0（决策已冻结）
-- **平台**：Windows First
+- **平台**：Windows / Linux（Windows 优先，Linux 完整支持）
 - **技术栈**：FastAPI + SQLite + React/TypeScript/Vite + yt-dlp + FFmpeg + faster-whisper
 
 ---
 
-## 1. 快速开始
+## 1. 安装与部署
 
-```powershell
-# 首次：安装（创建 .venv、装依赖、构建前端）
-setup.cmd            # 双击，或在 PowerShell 里：powershell -ExecutionPolicy Bypass -File .\setup.ps1
+支持三种方式：**Windows 一键脚本**、**Linux 裸机 + systemd**、**Docker**。
+（Linux 细节与排障见 [docs/v2/DEPLOY_LINUX.md](docs/v2/DEPLOY_LINUX.md)）
 
-# 启动
-run.cmd             # 双击；默认 http://127.0.0.1:8000
-```
-
-### 前置依赖
+### 前置依赖（两平台通用）
 
 | 依赖 | 版本 | 说明 |
 |---|---|---|
 | Python | **3.12**（3.14 太新，部分 ML 轮子不支持） | 运行后端 |
-| [uv](https://docs.astral.sh/uv/) | 最新 | 建虚拟环境/装依赖（可选，setup 会自动回退 pip） |
+| [uv](https://docs.astral.sh/uv/) | 最新 | 建虚拟环境/装依赖（可选，会自动回退 pip） |
 | FFmpeg / FFprobe | 5.0+ | 媒体探测、转码、抽音频（需在 PATH） |
-| yt-dlp | 2026.10+ | 下载器（`uv tool install yt-dlp`） |
+| yt-dlp | 2026.10+ | 下载器 |
 | Node.js + pnpm | Node 18+ / pnpm 8+ | 构建前端（仅首次构建需要） |
 
-> setup.cmd 会检查并提示缺失项。也可手动 `uv sync` 后 `.venv\Scripts\python -m uvicorn apps.main:app`。
+---
 
-> PowerShell 提示"未数字签名"是执行策略限制，用 `setup.cmd` / `run.cmd` 即可绕过，无需改系统策略。
+### 1.1 Windows
 
-**Linux / macOS：**
-
-```bash
-bash deploy/setup.sh      # 建 venv、装依赖、构建前端
-bash deploy/run.sh        # 默认 http://127.0.0.1:8000
+```powershell
+setup.cmd        # 双击，或： powershell -ExecutionPolicy Bypass -File .\setup.ps1
+run.cmd          # 双击；默认 http://127.0.0.1:8000
 ```
 
-也支持 **systemd 常驻**与 **Docker**，以及 Nginx（含 SSE 流式/视频 Range 配置）：
-见 [docs/v2/DEPLOY_LINUX.md](docs/v2/DEPLOY_LINUX.md)。
+> PowerShell 提示“未数字签名”是执行策略限制，用 `setup.cmd` / `run.cmd` 即可绕过。
+
+---
+
+### 1.2 Linux（裸机 + systemd）
+
+```bash
+# 1) 系统依赖
+sudo apt update && sudo apt install -y python3.12 python3.12-venv ffmpeg curl git
+# yt-dlp：sudo pipx install yt-dlp   或   python3 -m pip install --user yt-dlp
+
+# 2) 获取代码并安装
+sudo mkdir -p /opt/vidlearn && sudo chown $USER /opt/vidlearn
+git clone <你的仓库地址> /opt/vidlearn && cd /opt/vidlearn
+bash deploy/setup.sh          # 建 venv、装依赖、构建前端、检查工具
+cp .env.example .env && nano .env    # 填 VIDLEARN_LLM_API_KEY
+
+# 3) 启动（前台）
+bash deploy/run.sh            # http://127.0.0.1:8000
+
+# 4) 或注册为 systemd 服务（常驻 + 开机自启）
+sudo useradd -r -s /usr/sbin/nologin vidlearn
+sudo chown -R vidlearn:vidlearn /opt/vidlearn
+sudo cp deploy/vidlearn.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now vidlearn
+journalctl -u vidlearn -f     # 查看日志
+```
+
+- **必须单 worker**：SQLite 单连接 + 进程内任务表，`--workers` 只能为 1（脚本已强制）
+- 数据目录建议放独立磁盘：`.env` 里设 `VIDLEARN_DATA_ROOT=/data/vidlearn`
+
+---
+
+### 1.3 Docker（推荐用于隔离/迁移）
+
+```bash
+cd deploy
+cp ../.env.example ../.env && nano ../.env     # 填 LLM Key
+# 模型放到 ../models/faster-whisper-small（见 docs/v2/MODEL_SETUP.md）
+docker compose up -d --build
+docker compose logs -f
+```
+
+镜像内已含 FFmpeg 与固定版 yt-dlp；`data/`、`models/` 通过 volume 挂载，重建容器不丢数据。
+
+---
+
+### 1.4 Nginx 反向代理（对外访问时）
+
+```bash
+sudo cp deploy/nginx.conf.example /etc/nginx/sites-available/vidlearn
+sudo ln -s /etc/nginx/sites-available/vidlearn /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+配置里已处理三件事（**必须**，否则功能异常）：
+- `client_max_body_size 8G`：本地大视频上传
+- **`/api/videos/*/qa` 关闭 `proxy_buffering`**：否则 AI 问答的 SSE 流式会变成一次性输出
+- `/api/videos/*/media` 透传 `Range` 且不缓冲：视频拖动
+
+---
+
+### 1.5 从 Windows 迁移到 Linux
+
+```bash
+rsync -av "/win/路径/data/"   /opt/vidlearn/data/      # 数据库/媒体/字幕/收藏夹
+rsync -av "/win/路径/models/" /opt/vidlearn/models/    # 模型（可选，省得重下）
+rm -f /opt/vidlearn/data/credentials/*.cred            # DPAPI 密文在 Linux 失效
+# 启动后在网页里重新粘贴一次 B 站 Cookie
+sudo chown -R vidlearn:vidlearn /opt/vidlearn/data
+```
+
+> 凭证加密：Windows 用 DPAPI，Linux 用 Fernet（密钥 `data/credentials/.secret.key`，权限 0600）。
+> 因此**跨系统迁移需重新登录一次**，其余数据可直接复用。
+
+---
 
 ---
 
