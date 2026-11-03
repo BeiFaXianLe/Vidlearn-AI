@@ -3,7 +3,7 @@
 以本地媒体库为基础的个人视频学习工作站：把 B 站视频或本地视频，转成可播放、可检索、可复习的知识资产。
 
 - **版本**：V2.0（决策已冻结）
-- **平台**：Windows / Linux（Windows 优先，Linux 完整支持）
+- **平台**：Windows / Linux / macOS（Windows 优先，三平台均支持）
 - **技术栈**：FastAPI + SQLite + React/TypeScript/Vite + yt-dlp + FFmpeg + faster-whisper
 
 ---
@@ -65,7 +65,29 @@ journalctl -u vidlearn -f     # 查看日志
 
 ---
 
-### 1.3 Docker（推荐用于隔离/迁移）
+### 1.3 macOS（原生支持，launchd）
+
+macOS 与 Linux 走同一套 POSIX 路径，**凭证用 Fernet，无需改代码**。
+
+```bash
+brew install python@3.12 ffmpeg git node pnpm && brew install yt-dlp
+
+sudo mkdir -p /opt/vidlearn && sudo chown "$USER" /opt/vidlearn
+git clone <你的仓库地址> /opt/vidlearn && cd /opt/vidlearn
+bash deploy/setup.sh                 # 若 python3.12 不在 PATH：PYTHON=/opt/homebrew/bin/python3.12 bash deploy/setup.sh
+cp .env.example .env && open -e .env  # 填 VIDLEARN_LLM_API_KEY
+bash deploy/run.sh                    # http://127.0.0.1:8000
+
+# 常驻（launchd）
+cp deploy/com.vidlearn.ai.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.vidlearn.ai.plist
+```
+
+细节与排障见 [docs/v2/DEPLOY_MACOS.md](docs/v2/DEPLOY_MACOS.md)。
+
+---
+
+### 1.4 Docker（推荐用于隔离/迁移）
 
 ```bash
 cd deploy
@@ -79,7 +101,7 @@ docker compose logs -f
 
 ---
 
-### 1.4 Nginx 反向代理（对外访问时）
+### 1.5 Nginx 反向代理（对外访问时）
 
 ```bash
 sudo cp deploy/nginx.conf.example /etc/nginx/sites-available/vidlearn
@@ -94,7 +116,7 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ---
 
-### 1.5 从 Windows 迁移到 Linux
+### 1.6 从 Windows / Linux 迁移
 
 ```bash
 rsync -av "/win/路径/data/"   /opt/vidlearn/data/      # 数据库/媒体/字幕/收藏夹

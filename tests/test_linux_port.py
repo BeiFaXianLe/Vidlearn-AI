@@ -84,3 +84,17 @@ def test_credential_file_not_plaintext(tmp_path, monkeypatch):
     p.set("bilibili", "SESSDATA=supersecretvalue123")
     raw = (tmp_path / "cred" / "bilibili.cred").read_bytes()
     assert b"supersecretvalue123" not in raw       # 密文不含明文
+
+
+def test_macos_uses_fernet(tmp_path, monkeypatch):
+    """macOS(darwin) 上 DPAPI 不可用，必须回退到 Fernet 并持久化。"""
+    monkeypatch.setattr(cred_mod.sys, "platform", "darwin")
+
+    class _NoDpapiMac:
+        available = False
+
+    monkeypatch.setattr(cred_mod, "_Dpapi", _NoDpapiMac)
+    p = FileCredentialProvider(tmp_path / "cred")
+    assert p.backend == "fernet"
+    p.set("bilibili", "SESSDATA=macvalue")
+    assert FileCredentialProvider(tmp_path / "cred").get("bilibili")["SESSDATA"] == "macvalue"

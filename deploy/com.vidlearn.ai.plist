@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- VidLearn AI — macOS launchd 服务（LaunchAgent，仅当前用户登录后启动）
+     安装：
+       mkdir -p ~/Library/LaunchAgents
+       cp deploy/com.vidlearn.ai.plist ~/Library/LaunchAgents/
+       # 按实际路径修改下面 ProgramArguments / WorkingDirectory
+       launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.vidlearn.ai.plist
+       launchctl kickstart -k gui/$(id -u)/com.vidlearn.ai
+     查看： launchctl print gui/$(id -u)/com.vidlearn.ai
+     停止： launchctl bootout gui/$(id -u)/com.vidlearn.ai
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.vidlearn.ai</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/vidlearn/.venv/bin/python</string>
+        <string>-m</string>
+        <string>uvicorn</string>
+        <string>apps.main:app</string>
+        <string>--host</string>
+        <string>127.0.0.1</string>
+        <string>--port</string>
+        <string>8000</string>
+        <!-- 必须单 worker：SQLite 单连接 + 进程内任务表 -->
+        <string>--workers</string>
+        <string>1</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/opt/vidlearn</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONUTF8</key>
+        <string>1</string>
+        <key>PYTHONIOENCODING</key>
+        <string>utf-8</string>
+        <!-- 若用项目内模型，取消注释并改路径 -->
+        <!-- <key>VIDLEARN_ASR_MODEL_DIR</key>
+        <string>/opt/vidlearn/models/faster-whisper-small</string> -->
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ProcessType</key>
+    <string>Interactive</string>
+
+    <key>StandardOutPath</key>
+    <string>/opt/vidlearn/data/logs/launchd.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/opt/vidlearn/data/logs/launchd.err.log</string>
+</dict>
+</plist>

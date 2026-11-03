@@ -8,13 +8,32 @@ ROOT="$(pwd)"
 echo "== 项目目录: $ROOT =="
 
 # ---------- 1) Python 3.12 ----------
-PY="${PYTHON:-python3.12}"
-if ! command -v "$PY" >/dev/null 2>&1; then
-  echo "!! 未找到 python3.12。请安装：sudo apt install python3.12 python3.12-venv"
-  echo "   (或设置 PYTHON=python3.11 后重试)"
+# 选择 Python 3.12（支持 Linux / macOS）
+PY="${PYTHON:-}"
+if [ -z "$PY" ]; then
+  for cand in python3.12 python3; do
+    if command -v "$cand" >/dev/null 2>&1; then PY="$cand"; break; fi
+  done
+fi
+if [ -z "$PY" ] || ! command -v "$PY" >/dev/null 2>&1; then
+  echo "!! 未找到 Python 3.12。"
+  if [ "$(uname -s)" = "Darwin" ]; then
+    echo "   macOS: brew install python@3.12"
+  else
+    echo "   Linux: sudo apt install python3.12 python3.12-venv"
+  fi
   exit 1
 fi
-echo "== Python: $($PY --version) =="
+
+PYVER="$("$PY" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+echo "== Python: $PY ($PYVER) =="
+case "$PYVER" in
+  3.12) : ;;
+  3.13|3.14|3.11|3.10|3.9|2.*)
+    echo "!! 需要 Python 3.12（当前 $PYVER，ML 依赖对版本敏感）"
+    if [ "$(uname -s)" = "Darwin" ]; then echo "   macOS: brew install python@3.12 后设置 PYTHON=/opt/homebrew/bin/python3.12"; fi
+    exit 1 ;;
+esac
 
 # ---------- 2) 依赖 ----------
 DEPS=(
@@ -26,7 +45,7 @@ DEPS=(
 
 if [ ! -d .venv ]; then
   if command -v uv >/dev/null 2>&1; then
-    uv venv .venv --python 3.12
+    uv venv .venv --python "$PY"
   else
     "$PY" -m venv .venv
   fi
@@ -42,6 +61,9 @@ echo "== 后端依赖已安装 =="
 
 # ---------- 3) 前端构建 ----------
 if [ -f apps/web/package.json ]; then
+  if ! command -v pnpm >/dev/null 2>&1 && command -v corepack >/dev/null 2>&1; then
+    corepack enable >/dev/null 2>&1 || true
+  fi
   if command -v pnpm >/dev/null 2>&1; then
     ( cd apps/web && pnpm install --config.confirmModulesPurge=false && node node_modules/vite/bin/vite.js build )
     echo "== 前端构建完成 =="
