@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     ffmpeg_path: str = "ffmpeg"
     ffprobe_path: str = "ffprobe"
     yt_dlp_path: str = "yt-dlp"
+    # 从浏览器读取 Cookie 传给 yt-dlp（抖音等需要新鲜 Cookie 时用）
+    # 取值如 chrome / edge / firefox / brave，留空则不用
+    ytdlp_cookies_from_browser: str = ""
 
     # ASR
     asr_model: str = "small"

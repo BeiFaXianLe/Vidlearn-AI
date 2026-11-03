@@ -162,7 +162,8 @@ async def _run_intake(app, job_id: str, body: IntakeIn):
         _set_job(app, job_id, stage="解析链接/文件", progress=8)
         ad = resolve_adapter(body.source, yt_dlp=st.settings.yt_dlp_path,
                              ffprobe=st.settings.ffprobe_path, cookie_provider=cred,
-                             cookie_tmp_dir=st.settings.media.temp / "cookies")
+                             cookie_tmp_dir=st.settings.media.temp / "cookies",
+                             cookies_from_browser=st.settings.ytdlp_cookies_from_browser)
         meta = await ad.probe(body.source)
         with st.db_lock:
             video = MediaIntake(vrepo, arepo).register_video(meta)

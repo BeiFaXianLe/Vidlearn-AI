@@ -210,7 +210,7 @@ VidLearn AI/
 
 ## 4. 功能与使用
 
-1. **导入**：点右上角「导入视频」→ B 站链接或本地文件路径 →（可选）贴 Cookie 获取平台字幕/高清 → 后台任务带进度。
+1. **导入**：点右上角「导入视频」→ B 站 / 抖音链接或本地文件路径 →（可选）贴 Cookie 获取平台字幕/高清 → 后台任务带进度。
 2. **字幕三级回退**（自动）：**平台字幕**（登录态优先）→ **视频内嵌字幕** → **本地 ASR**（faster-whisper，默认开启）。导入时若前两级都没有，会自动跑 ASR 生成字幕；耗时约为音频时长的 1/5（30 分钟视频约 6 分钟，CPU）。
 3. **播放**：详情页本地播放器，支持拖动（HTTP Range）；MKV/MOV 入库时自动转 MP4，浏览器可直接播放。
 4. **AI 分析**：摘要 / 章节 / 知识点（需配置 LLM Key）。
@@ -249,7 +249,7 @@ VidLearn AI/
 
 ## 6. 重要说明
 
-- **抖音**：暂缓接入（开源 CLI 方案被平台风控阻断），保留 Adapter 接口与降级提示。
+- **抖音**：已支持（Beta）——基于 yt-dlp 内置 Douyin 解析器，无需自建下载器；部分视频需在导入页粘贴抖音 Cookie 才能高清/绕过风控。
 - **模型**：已预置 `models/faster-whisper-small/`；换机/重装见 [docs/v2/MODEL_SETUP.md](docs/v2/MODEL_SETUP.md)。
 - **许可证**：FFmpeg 为 GPL full build，对外分发前需换 LGPL（见 [docs/v2/LICENSE_AUDIT.md](docs/v2/LICENSE_AUDIT.md)）。
 - **字幕标点**：ASR 字幕自动用 LLM 补标点（派生轨，原始字幕保留），见 [docs/v2/PUNCTUATION.md](docs/v2/PUNCTUATION.md)

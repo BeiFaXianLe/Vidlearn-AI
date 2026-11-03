@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, askQa, fmtSize, fmtTime, mergeCues, type Video, type MediaAsset, type Segment, type Collection } from "./api";
 
+function platLabel(p?: string): string {
+  return p === "bilibili" ? "B站" : p === "douyin" ? "抖音" : "本地";
+}
+
 type View = { name: "home" } | { name: "detail"; id: string } | { name: "tasks" };
 
 export default function App() {
@@ -379,9 +383,9 @@ function Home({
           <span>⌕</span>
           <input placeholder="搜索视频标题、作者..." value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
-        {["all", "bilibili", "local"].map((p) => (
+        {["all", "bilibili", "douyin", "local"].map((p) => (
           <button key={p} className={"chip" + (pf === p ? " selected" : "")} onClick={() => setPf(p)}>
-            {p === "all" ? "全部" : p === "bilibili" ? "B站" : "本地"}
+            {p === "all" ? "全部" : p === "bilibili" ? "B站" : p === "douyin" ? "抖音" : "本地"}
           </button>
         ))}
       </div>
@@ -393,7 +397,7 @@ function Home({
           {filtered.map((v, i) => (
             <article key={v.id} className={"video-card" + (v.favorite ? " faved" : "")} onClick={() => onOpen(v.id)}>
               <div className="cover" style={{ background: coverPalette[i % coverPalette.length] }}>
-                <span className="platform">{v.platform === "bilibili" ? "B站" : "本地"}</span>
+                <span className="platform">{platLabel(v.platform)}</span>
                 <span>{v.title.slice(0, 28)}</span>
                 <span className="duration">{fmtTime(v.duration_ms)}</span>
                 <button
@@ -898,7 +902,7 @@ function Detail({ id, onBack, show }: { id: string; onBack: () => void; show: (m
         </button>
         <span className="detail-title">{data?.video?.title || "加载中..."}</span>
         <span className="detail-meta">
-          {data?.video?.platform === "bilibili" ? "B站" : "本地"} · {fmtTime(data?.video?.duration_ms || 0)}
+          {platLabel(data?.video?.platform)} · {fmtTime(data?.video?.duration_ms || 0)}
         </span>
       </div>
 
@@ -1341,7 +1345,9 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
     setBusy(true);
     try {
       if (cookie.trim()) {
-        await api.setCredential(cookie.trim());
+        const joined = list.join(" ");
+        const onlyDouyin = /douyin\.com/i.test(joined) && !/bilibili\.com/i.test(joined);
+        await api.setCredential(cookie.trim(), onlyDouyin ? "douyin" : "bilibili");
         show("Cookie 已加密保存");
       }
       const opts: any = {
@@ -1372,10 +1378,10 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
     <div className="modalback" onClick={(e) => e.target === e.currentTarget && !busy && onClose()}>
       <div className="modal">
         <h2>批量导入视频</h2>
-        <p>粘贴 Bilibili / 抖音链接或本地文件路径，<b>每行一个</b>。提交后在后台排队处理，可以离开当前页面。</p>
+        <p>粘贴 <b>B站 / 抖音</b> 链接或本地文件路径，<b>每行一个</b>。提交后在后台排队处理，可以离开当前页面。</p>
         <textarea
           className="importarea"
-          placeholder={"https://www.bilibili.com/video/BV1xx411c7mD\nhttps://www.bilibili.com/video/BV1yy411c7mE\nD:\\\\videos\\\\local.mp4"}
+          placeholder={"https://www.bilibili.com/video/BV1xx411c7mD\nhttps://v.douyin.com/iRxAbcDe/\nD:\\\\videos\\\\local.mp4"}
           value={text}
           disabled={busy}
           onChange={(e) => setText(e.target.value)}
@@ -1398,7 +1404,7 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
         <textarea
           className="importarea"
           style={{ minHeight: 60 }}
-          placeholder="（可选）粘贴 B站 SESSDATA 或完整 Cookie，用于获取平台字幕/高清。仅本地加密保存。"
+          placeholder="（可选）B站粘贴 SESSDATA / 抖音粘贴 Cookie(ttwid、sessionid 等)，用于获取字幕或高清/绕过风控。仅本地加密保存，按来源自动区分平台。"
           value={cookie}
           disabled={busy}
           onChange={(e) => setCookie(e.target.value)}

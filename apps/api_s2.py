@@ -49,7 +49,8 @@ async def probe(body: ProbeIn, request: Request):
     try:
         ad = resolve_adapter(body.source, yt_dlp=st.settings.yt_dlp_path,
                              ffprobe=st.settings.ffprobe_path, cookie_provider=_cred(request),
-                             cookie_tmp_dir=st.settings.media.temp / "cookies")
+                             cookie_tmp_dir=st.settings.media.temp / "cookies",
+                             cookies_from_browser=st.settings.ytdlp_cookies_from_browser)
         meta = await ad.probe(body.source)
         return {"ok": True, "meta": meta.__dict__}
     except AcquireError as e:
@@ -62,7 +63,8 @@ async def import_media(body: ImportIn, request: Request):
     try:
         ad = resolve_adapter(body.source, yt_dlp=st.settings.yt_dlp_path,
                              ffprobe=st.settings.ffprobe_path, cookie_provider=_cred(request),
-                             cookie_tmp_dir=st.settings.media.temp / "cookies")
+                             cookie_tmp_dir=st.settings.media.temp / "cookies",
+                             cookies_from_browser=st.settings.ytdlp_cookies_from_browser)
         mgr = AcquisitionManager(st.settings.media.temp, st.settings.media.original, st.settings.ffmpeg_path)
         res = await mgr.acquire(ad, body.source, max_height=body.max_height,
                                 download_sections=body.download_sections)
@@ -107,7 +109,7 @@ def _bili(request: Request) -> BilibiliAdapter:
     return BilibiliAdapter(yt_dlp_path=st.settings.yt_dlp_path,
                            ffprobe=st.settings.ffprobe_path,
                            cookie_provider=_cred(request),
-                             cookie_tmp_dir=st.settings.media.temp / "cookies")
+                           cookie_tmp_dir=st.settings.media.temp / "cookies")
 
 
 @router.get("/bilibili/fav/folders")
@@ -138,7 +140,8 @@ async def transcript_tracks(source: str, request: Request):
     st = _state(request)
     ad = resolve_adapter(source, yt_dlp=st.settings.yt_dlp_path,
                          ffprobe=st.settings.ffprobe_path, cookie_provider=_cred(request),
-                             cookie_tmp_dir=st.settings.media.temp / "cookies")
+                             cookie_tmp_dir=st.settings.media.temp / "cookies",
+                             cookies_from_browser=st.settings.ytdlp_cookies_from_browser)
     if not hasattr(ad, "fetch_subtitles"):
         raise HTTPException(status_code=400, detail="该来源不支持平台字幕")
     r = await ad.fetch_subtitles(source)
