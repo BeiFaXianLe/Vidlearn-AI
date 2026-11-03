@@ -87,10 +87,19 @@ async def _run_asr(app, video_id: str, media_path: Path, asset_id: str | None) -
         provider = FasterWhisperASR(ffmpeg=st.settings.ffmpeg_path,
                                     model_dir=st.settings.asr_model_dir or None,
                                     work_dir=str(st.settings.media.audio_work))
+        # 术语热词注入（L1）：把该视频相关术语作为 initial_prompt
+        try:
+            from apps.storage import GlossaryRepo
+            with st.db_lock:
+                _terms = GlossaryRepo(db).resolved_terms(video_id)
+            _prompt = "、".join(t["term"] for t in _terms[:60]) if _terms else None
+        except Exception:
+            _prompt = None
         opts = ASROpts(model=st.settings.asr_model, device=st.settings.asr_device,
                        compute_type=st.settings.asr_compute_type,
                        segment_sec=st.settings.asr_segment_sec,
-                       overlap_sec=st.settings.asr_overlap_sec)
+                       overlap_sec=st.settings.asr_overlap_sec,
+                       initial_prompt=_prompt)
         result = await provider.transcribe(media_path, opts)
         if not result.cues:
             return {"cues": 0, "reason": result.reason or "ASR 无输出"}

@@ -17,7 +17,7 @@ if (-not (Test-Path ".venv")) {
 }
 
 Write-Host "== 2. 安装后端依赖 ==" -ForegroundColor Cyan
-$pydeps = @("fastapi","uvicorn[standard]","pydantic","pydantic-settings","python-multipart","pyyaml","httpx","faster-whisper>=1.2,<1.3","opencc-python-reimplemented","cryptography","pytest","pytest-asyncio")
+$pydeps = @("fastapi","uvicorn[standard]","pydantic","pydantic-settings","python-multipart","pyyaml","httpx","faster-whisper>=1.2,<1.3","opencc-python-reimplemented","cryptography","pypinyin","pytest","pytest-asyncio")
 if (Have "uv") {
     uv pip install --python ".\.venv\Scripts\python.exe" @pydeps 2>&1 | Out-Null
 } else {

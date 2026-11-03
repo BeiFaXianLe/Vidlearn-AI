@@ -504,6 +504,16 @@ function Detail({ id, onBack, show }: { id: string; onBack: () => void; show: (m
   const [reimportBusy, setReimportBusy] = useState(false);
   const [reimportStage, setReimportStage] = useState("");
   const [mediaError, setMediaError] = useState(false);
+  // ---- 字幕校准（S9）----
+  const [qc, setQc] = useState<any>(null);
+  const [calibBusy, setCalibBusy] = useState(false);
+  const [calibStage, setCalibStage] = useState("");
+  const [changes, setChanges] = useState<any[]>([]);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [glossOpen, setGlossOpen] = useState(false);
+  const [glossTerms, setGlossTerms] = useState<any[]>([]);
+  const [useLlm, setUseLlm] = useState(true);
+  const [useAlign, setUseAlign] = useState(true);
 
   async function loadDetail() {
     try {
@@ -526,6 +536,7 @@ function Detail({ id, onBack, show }: { id: string; onBack: () => void; show: (m
       setChapters(c?.chapters || []);
       setPoints(p?.knowledge_points || []);
       setNote(localStorage.getItem("note:" + id) || "");
+      fetch(`/api/videos/${id}/subtitle-qc`).then((r) => r.json()).then(setQc).catch(() => {});
     } catch (e: any) {
       show("加载详情失败: " + e.message);
     }
@@ -534,6 +545,93 @@ function Detail({ id, onBack, show }: { id: string; onBack: () => void; show: (m
   useEffect(() => {
     loadDetail();
   }, [id]);
+
+  async function loadQC() {
+    try {
+      const r = await fetch(`/api/videos/${id}/subtitle-qc`).then((x) => x.json());
+      setQc(r);
+    } catch {}
+  }
+
+  async function runCalibrate() {
+    if (calibBusy) return;
+    setCalibBusy(true);
+    setCalibStage("提交校准任务…");
+    try {
+      const r = await fetch(`/api/videos/${id}/calibrate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ do_llm: useLlm, do_align: useAlign }),
+      }).then((x) => x.json());
+      if (!r.task_id) throw new Error(r.detail || "提交失败");
+      for (let i = 0; i < 1200; i++) {
+        await new Promise((res) => setTimeout(res, 700));
+        const t = await fetch(`/api/tasks/${r.task_id}`).then((x) => x.json());
+        setCalibStage(t.stage || "");
+        if (t.status === "done") {
+          show(`校准完成：${t.result?.changes ?? 0} 处修改，质量 ${t.result?.qc_before ?? "?"} → ${t.result?.qc_after ?? "?"}`);
+          await loadDetail();
+          await loadQC();
+          const ch = await fetch(`/api/videos/${id}/caption-changes`).then((x) => x.json());
+          setChanges(ch.changes || []);
+          setReviewOpen(true);
+          break;
+        }
+        if (t.status === "error") throw new Error(t.error?.message || "校准失败");
+      }
+    } catch (e: any) {
+      show("校准失败: " + e.message);
+    } finally {
+      setCalibBusy(false);
+      setCalibStage("");
+    }
+  }
+
+  async function openReview() {
+    try {
+      const ch = await fetch(`/api/videos/${id}/caption-changes`).then((x) => x.json());
+      setChanges(ch.changes || []);
+      setReviewOpen(true);
+    } catch (e: any) {
+      show("读取变更失败: " + e.message);
+    }
+  }
+
+  async function revertCalibration(captionId: string) {
+    if (!confirm("撤销后该视频将回退到校准前的字幕。确定？")) return;
+    try {
+      await fetch(`/api/videos/${id}/captions/${captionId}`, { method: "DELETE" });
+      show("已撤销校准");
+      setReviewOpen(false);
+      await loadDetail();
+      await loadQC();
+    } catch (e: any) {
+      show("撤销失败: " + e.message);
+    }
+  }
+
+  async function openGlossary() {
+    try {
+      const r = await fetch(`/api/glossary?video_id=${id}`).then((x) => x.json());
+      setGlossTerms(r.terms || []);
+      setGlossOpen(true);
+    } catch (e: any) {
+      show("读取术语表失败: " + e.message);
+    }
+  }
+
+  async function extractTerms() {
+    try {
+      const r = await fetch(`/api/glossary/extract`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ video_id: id, save: true, scope: "video" }),
+      }).then((x) => x.json());
+      show(`已抽取 ${r.saved?.length ?? 0} 个候选术语，请核对`);
+      await openGlossary();
+    } catch (e: any) {
+      show("抽取失败: " + e.message);
+    }
+  }
 
   // 媒体资产按创建时间升序返回，取最新一条（重新导入后旧资产仍在）
   const media: MediaAsset | undefined = data?.media_assets?.length
@@ -990,10 +1088,31 @@ function Detail({ id, onBack, show }: { id: string; onBack: () => void; show: (m
                   </div>
 
                   {segments.length > 0 && (
-                    <div className="right-actions" style={{ marginTop: 0, marginBottom: 12 }}>
+                    <div className="calib-bar">
+                      {qc && qc.score != null && (
+                        <span
+                          className={"qc-badge " + (qc.score >= 85 ? "good" : qc.score >= 60 ? "mid" : "bad")}
+                          title="字幕质量分（0-100），越低越需要校准"
+                        >
+                          字幕质量 {qc.score}
+                          {qc.stats?.variant_hits ? ` · 疑似术语错 ${qc.stats.variant_hits}` : ""}
+                        </span>
+                      )}
+                      <label className="calib-opt">
+                        <input type="checkbox" checked={useLlm} onChange={(e) => setUseLlm(e.target.checked)} /> AI 纠错
+                      </label>
+                      <label className="calib-opt">
+                        <input type="checkbox" checked={useAlign} onChange={(e) => setUseAlign(e.target.checked)} /> 时间轴对齐
+                      </label>
+                      <button className="btn soft" disabled={calibBusy} onClick={() => runCalibrate()}>
+                        {calibBusy ? <span className="spin" /> : "校准字幕"}
+                      </button>
+                      <button className="btn soft" onClick={() => openGlossary()}>术语表</button>
+                      <button className="btn soft" onClick={() => openReview()}>查看改动</button>
                       <button className="btn soft" disabled={punctBusy} onClick={() => runPunctuate()}>
                         {punctBusy ? <span className="spin" /> : "补标点"}
                       </button>
+                      {calibBusy && <span className="meta">{calibStage}</span>}
                       {punctBusy && <span className="meta">{punctStage}</span>}
                     </div>
                   )}
@@ -1146,6 +1265,25 @@ function Detail({ id, onBack, show }: { id: string; onBack: () => void; show: (m
           </div>
         </div>
       </div>
+
+      {reviewOpen && (
+        <CalibrationReview
+          changes={changes}
+          captionId={qc?.caption_id}
+          onRevert={revertCalibration}
+          onClose={() => setReviewOpen(false)}
+        />
+      )}
+      {glossOpen && (
+        <GlossaryManager
+          videoId={id}
+          terms={glossTerms}
+          onExtract={extractTerms}
+          onRefresh={openGlossary}
+          onClose={() => setGlossOpen(false)}
+          show={show}
+        />
+      )}
     </>
   );
 }
@@ -1430,6 +1568,152 @@ function CollectionPicker({ video, collections, onClose, onChanged, show }: {
         <div className="modalfoot" style={{ marginTop: 14 }}>
           <button className="btn" onClick={createNew} disabled={busy}>＋ 新建收藏夹</button>
           <button className="btn primary" onClick={onClose} disabled={busy}>完成</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CalibrationReview({ changes, captionId, onRevert, onClose }: {
+  changes: any[];
+  captionId?: string | null;
+  onRevert: (captionId: string) => void;
+  onClose: () => void;
+}) {
+  const [filter, setFilter] = useState<"all" | "low">("all");
+  const shown = filter === "low" ? changes.filter((c) => (c.confidence ?? 1) < 0.8) : changes;
+  const reasonLabel: Record<string, string> = {
+    pinyin: "同音纠错", variant: "已知错写", "variant+pinyin": "术语纠错",
+    llm: "AI 纠错", align: "时间轴微调", manual: "手工",
+  };
+  function fmt(ms: any) {
+    if (ms == null) return "";
+    const s = Math.floor(ms / 1000);
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  }
+  return (
+    <div className="modalback" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ width: "min(760px,96%)" }}>
+        <h2>校准结果复核</h2>
+        <p>共 <b>{changes.length}</b> 处改动。低置信改动建议人工确认；不满意可整体撤销（原始字幕始终保留）。</p>
+        <div className="toolbar" style={{ margin: "6px 0 10px" }}>
+          <button className={"chip" + (filter === "all" ? " selected" : "")} onClick={() => setFilter("all")}>全部 {changes.length}</button>
+          <button className={"chip" + (filter === "low" ? " selected" : "")} onClick={() => setFilter("low")}>
+            仅低置信 {changes.filter((c) => (c.confidence ?? 1) < 0.8).length}
+          </button>
+        </div>
+        <div className="changelist">
+          {shown.length === 0 && <div className="empty">没有需要显示的改动（可能已回退或无需修改）。</div>}
+          {shown.map((ch, i) => {
+            const isTime = ch.reason === "align" && ch.time_from_ms != null;
+            return (
+              <div key={i} className="change-item">
+                <div className="change-head">
+                  <span className={"reason " + ch.reason}>{reasonLabel[ch.reason] || ch.reason}</span>
+                  <span className="muted">{fmt(ch.start_ms)}</span>
+                  {ch.confidence != null && (
+                    <span className={"conf " + ((ch.confidence ?? 1) < 0.8 ? "low" : "ok")}>
+                      {Math.round((ch.confidence ?? 1) * 100)}%
+                    </span>
+                  )}
+                </div>
+                {isTime ? (
+                  <div className="diff-line">
+                    <span className="t-old">{fmt(ch.time_from_ms)}</span> →
+                    <span className="t-new">{fmt(ch.time_to_ms)}</span>
+                    <span className="muted"> {ch.after}</span>
+                  </div>
+                ) : (
+                  <div className="diff-line">
+                    <del>{ch.before}</del>
+                    <ins>{ch.after}</ins>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div className="modalfoot" style={{ marginTop: 14 }}>
+          {captionId && (
+            <button className="btn" onClick={() => onRevert(captionId)}>撤销本次校准</button>
+          )}
+          <button className="btn primary" onClick={onClose}>保留校准结果</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GlossaryManager({ videoId, terms, onExtract, onRefresh, onClose, show }: {
+  videoId: string;
+  terms: any[];
+  onExtract: () => void;
+  onRefresh: () => void;
+  onClose: () => void;
+  show: (m: string) => void;
+}) {
+  const [term, setTerm] = useState("");
+  const [variants, setVariants] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function addTerm() {
+    const t = term.trim();
+    if (!t) return show("请输入术语");
+    setBusy(true);
+    try {
+      const vs = variants.split(/[,，;；\s]+/).map((s) => s.trim()).filter(Boolean);
+      const r = await fetch("/api/glossary", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ term: t, variants: vs, scope: "video", video_id: videoId, category: "术语" }),
+      }).then((x) => x.json());
+      if (r.ok === false) throw new Error(r.detail || "失败");
+      setTerm(""); setVariants("");
+      await onRefresh();
+      show("已添加术语：" + t);
+    } catch (e: any) {
+      show("添加失败: " + e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function del(gid: string) {
+    try {
+      await fetch(`/api/glossary/${gid}`, { method: "DELETE" });
+      await onRefresh();
+    } catch (e: any) {
+      show("删除失败: " + e.message);
+    }
+  }
+
+  return (
+    <div className="modalback" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ width: "min(640px,96%)" }}>
+        <h2>术语表（用于纠正同音错字）</h2>
+        <p>把品牌名、人名、产品名等正确写法加进来；校准时会据此修正如「金州→镜舟」这类同音错误。</p>
+        <div className="gloss-add">
+          <input placeholder="正确写法，如：镜舟科技" value={term} onChange={(e) => setTerm(e.target.value)} />
+          <input placeholder="已知错误写法（可选，逗号分隔）：金州科技,荆州科技" value={variants} onChange={(e) => setVariants(e.target.value)} />
+          <button className="btn primary" disabled={busy} onClick={addTerm}>{busy ? <span className="spin" /> : "添加"}</button>
+        </div>
+        <div className="toolbar" style={{ margin: "10px 0" }}>
+          <button className="btn soft" onClick={onExtract}>从标题 / 总结自动抽取</button>
+        </div>
+        <div className="changelist">
+          {terms.length === 0 && <div className="empty">还没有术语。点上方“自动抽取”或手动添加。</div>}
+          {terms.map((t) => (
+            <div key={t.id} className="gloss-item">
+              <b>{t.term}</b>
+              {t.scope === "video" ? <span className="tag">本视频</span> : <span className="tag">全局</span>}
+              {(t.variants && JSON.parse(t.variants || "[]").length > 0) && (
+                <span className="muted">已知错写：{JSON.parse(t.variants).join("、")}</span>
+              )}
+              <button className="tbtn" onClick={() => del(t.id)}>删除</button>
+            </div>
+          ))}
+        </div>
+        <div className="modalfoot" style={{ marginTop: 14 }}>
+          <button className="btn primary" onClick={onClose}>完成</button>
         </div>
       </div>
     </div>

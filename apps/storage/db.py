@@ -9,7 +9,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 SCHEMA_SQL = """
 PRAGMA foreign_keys = ON;
@@ -188,6 +188,53 @@ CREATE TABLE IF NOT EXISTS jobs (
 CREATE INDEX IF NOT EXISTS idx_jobs_created ON jobs(created_at);
 """
 
+SCHEMA_V7_SQL = """
+PRAGMA foreign_keys = ON;
+
+-- 术语表：用于 ASR 热词注入与拼音同音纠错
+CREATE TABLE IF NOT EXISTS glossary (
+    id         TEXT PRIMARY KEY,
+    scope      TEXT NOT NULL DEFAULT 'global',      -- global / video
+    video_id   TEXT REFERENCES videos(id) ON DELETE CASCADE,
+    term       TEXT NOT NULL,                        -- 正确写法
+    variants   TEXT,                                 -- 已知错误写法（JSON 数组）
+    category   TEXT,                                 -- 品牌/人名/术语/产品
+    weight     INTEGER NOT NULL DEFAULT 0,
+    enabled    INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_glossary_term
+    ON glossary(scope, COALESCE(video_id, ''), term);
+
+-- 字幕校准变更日志（M2：复核与回退）
+CREATE TABLE IF NOT EXISTS caption_changes (
+    id            TEXT PRIMARY KEY,
+    video_id      TEXT NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+    caption_id    TEXT NOT NULL REFERENCES source_captions(id) ON DELETE CASCADE,
+    segment_index INTEGER,
+    start_ms      INTEGER,
+    before        TEXT NOT NULL,
+    after         TEXT NOT NULL,
+    reason        TEXT NOT NULL,                     -- pinyin / llm / align / manual
+    time_from_ms  INTEGER,
+    time_to_ms    INTEGER,
+    confidence    REAL,
+    accepted      INTEGER NOT NULL DEFAULT 1,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_changes_caption ON caption_changes(caption_id);
+CREATE INDEX IF NOT EXISTS idx_changes_video ON caption_changes(video_id);
+
+-- 字幕质量报告（每轨每次校准一条）
+CREATE TABLE IF NOT EXISTS caption_qc (
+    caption_id   TEXT PRIMARY KEY REFERENCES source_captions(id) ON DELETE CASCADE,
+    video_id     TEXT NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+    score        REAL NOT NULL,
+    report_json  TEXT NOT NULL,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+"""
+
 
 def connect(db_path: Path) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -243,6 +290,9 @@ def migrate(conn: sqlite3.Connection) -> int:
     if ver < 6:
         conn.executescript(SCHEMA_V6_SQL)
         ver = 6
+    if ver < 7:
+        conn.executescript(SCHEMA_V7_SQL)
+        ver = 7
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()
     return SCHEMA_VERSION

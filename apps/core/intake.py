@@ -21,8 +21,9 @@ SOURCE_PRIORITY = {
     "bilibili_ai": 2,
     "user": 3,
     "embedded": 4,
-    "asr_punct": 5,   # ASR + LLM 标点恢复（可读性优于原始 ASR）
-    "asr": 6,
+    "asr_corrected": 5,   # ASR + 术语/同音/LLM 校准后（优于未校准）
+    "asr_punct": 6,       # ASR + LLM 标点恢复
+    "asr": 7,
 }
 
 
@@ -108,10 +109,23 @@ class CaptionIntake:
         return cap
 
     def choose_primary(self, video_id: str) -> dict | None:
-        """按来源优先级 + 完整性选主字幕轨（不删除其他轨）。"""
+        """按来源优先级 + 完整性选主字幕轨（不删除其他轨）。
+
+        若用户在 UI 显式指定了首选轨（app_settings.preferred_caption:<video>），优先返回它。
+        """
         tracks = self.captions.for_video(video_id)
         if not tracks:
             return None
+        try:
+            row = self.captions.conn.execute(
+                "SELECT value FROM app_settings WHERE key=?",
+                (f"preferred_caption:{video_id}",)).fetchone()
+            if row:
+                for t in tracks:
+                    if t["id"] == row[0]:
+                        return t
+        except Exception:
+            pass
 
         def key(t: dict):
             return (SOURCE_PRIORITY.get(t["source_type"], 99),

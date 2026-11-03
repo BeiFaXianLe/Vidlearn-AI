@@ -27,6 +27,7 @@ class ASROpts:
     segment_sec: int = 30
     overlap_sec: int = 2
     vad_filter: bool = True
+    initial_prompt: str | None = None   # 术语热词（提升专有名词识别）
 
 
 @dataclass
@@ -194,8 +195,10 @@ class FasterWhisperASR:
         merged: list[dict] = []
         t0 = time.time()
         for chunk, offset in chunks:
-            segs, _ = model.transcribe(chunk, language=opts.language,
-                                       vad_filter=opts.vad_filter)
+            _kw = {"language": opts.language, "vad_filter": opts.vad_filter}
+            if opts.initial_prompt:
+                _kw["initial_prompt"] = opts.initial_prompt
+            segs, _ = model.transcribe(chunk, **_kw)
             for s in segs:
                 text = s.text.strip()
                 if not text:
@@ -204,6 +207,7 @@ class FasterWhisperASR:
                     "start_ms": int((offset + s.start) * 1000),
                     "end_ms": int((offset + s.end) * 1000),
                     "text": text,
+                    "confidence": round(float(getattr(s, "avg_logprob", 0.0) or 0.0), 4),
                 })
         infer = time.time() - t0
         merged.sort(key=lambda c: c["start_ms"])

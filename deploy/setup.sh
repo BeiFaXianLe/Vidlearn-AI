@@ -39,7 +39,7 @@ esac
 DEPS=(
   "fastapi" "uvicorn[standard]" "pydantic" "pydantic-settings"
   "python-multipart" "pyyaml" "httpx"
-  "faster-whisper>=1.2,<1.3" "opencc-python-reimplemented" "cryptography"
+  "faster-whisper>=1.2,<1.3" "opencc-python-reimplemented" "cryptography" "pypinyin"
   "pytest" "pytest-asyncio"
 )
 

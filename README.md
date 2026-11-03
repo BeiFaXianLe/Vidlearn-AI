@@ -222,6 +222,7 @@ VidLearn AI/
 10. **繁简转换**：字幕入库统一转简体（OpenCC t2s），存量可用 `scripts/simplify_captions.py` 迁移。
 11. **字幕分段展示**：逐句字幕按停顿/标点合并成段落显示（库内仍保留细粒度用于精确定位）。
 12. **工作台交互**：播放器滚动时吸顶、章节与字幕合并为同一 Tab、点击章节定位字幕块。
+13. **字幕校准**：术语表 + 模糊拼音同音纠错（金州/荆州→镜舟）+ AI 约束校订 + 时间轴对齐，改动可逐条复核、可撤销。见 [SUBTITLE_CALIBRATION.md](docs/v2/SUBTITLE_CALIBRATION.md)。
 
 > 已有视频想补字幕：详情页「章节与字幕」Tab →「运行本地 ASR 生成字幕」。
 > 详细说明见 [docs/v2/V2_FEATURES.md](docs/v2/V2_FEATURES.md)。
