@@ -2,8 +2,20 @@
 
 > VidLearn AI V2.2 · 基于 yt-dlp 内置 Douyin 解析器
 
-## 方案
-不自行实现抖音解析/签名，直接复用 **yt-dlp 内置的 `Douyin` extractor**（与 B 站共用好莱坞式下载管线）：
+## 方案（默认：浏览器解析通道，免 Cookie）
+抖音对 yt-dlp 频繁要求"新鲜 Cookie"，直接走 yt-dlp 常失败。因此**默认改用 Playwright 浏览器解析通道**：
+用本机 Chrome/Edge 打开视频页，让页面自己完成签名/风控，拦截 `aweme/v1/web/aweme/detail` 接口 JSON，
+取出标题/作者/时长/封面/播放地址并直接下载。**多数视频无需手动准备 Cookie**。
+yt-dlp 作为兜底（可设 `VIDLEARN_DOUYIN_USE_BROWSER=false` 关闭浏览器通道）。
+
+> 依赖：`playwright` + 本机 Chrome/Edge（自动探测；无则 `playwright install chromium`）。
+> 实测：真实抖音短链 → 标题/作者/时长正确，下载 2.5MB H.264 视频（含音频）。
+
+### 实现位置
+- `apps/core/douyin_browser.py`：`resolve()`（拦截 detail）+ `download()`（流式下载）
+- `apps/adapters/douyin.py`：浏览器优先，失败回退 yt-dlp
+
+（以下为 yt-dlp 兜底说明）
 - `apps/adapters/douyin.py` —— `DouyinAdapter`（probe / fetch_media）
 - 路由：`resolve_adapter()` 识别 `douyin.com` / `v.douyin.com` / 含链接的分享文案
 - 能力复用：下载、完整性校验、MKV/MOV→MP4、本地 ASR、AI 分析、字幕校准、任务管理

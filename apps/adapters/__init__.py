@@ -21,7 +21,8 @@ __all__ = [
 
 def resolve_adapter(source: str, *, yt_dlp: str = "yt-dlp", ffprobe: str = "ffprobe",
                     cookie_provider=None, cookie_tmp_dir=None,
-                    cookies_from_browser: str = "") -> VideoAdapter:
+                    cookies_from_browser: str = "",
+                    douyin_use_browser: bool = True, douyin_browser_path: str = "") -> VideoAdapter:
     """按来源返回适配器。source 可为本地路径或 URL。"""
     s = (source or "").strip()
     if "bilibili.com" in s or s.upper().startswith("BV") or "/video/BV" in s:
@@ -32,7 +33,9 @@ def resolve_adapter(source: str, *, yt_dlp: str = "yt-dlp", ffprobe: str = "ffpr
         return DouyinAdapter(yt_dlp_path=yt_dlp, ffprobe=ffprobe,
                              cookie_provider=cookie_provider,
                              cookie_tmp_dir=cookie_tmp_dir,
-                             cookies_from_browser=cookies_from_browser)
+                             cookies_from_browser=cookies_from_browser,
+                             use_browser=douyin_use_browser,
+                             browser_path=douyin_browser_path)
     # 其它平台暂不支持
     from pathlib import Path
     if Path(s).exists():

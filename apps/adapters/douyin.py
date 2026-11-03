@@ -15,6 +15,7 @@ from pathlib import Path
 
 from apps.adapters._util import ffprobe_json, run_cmd, sha256_file
 from apps.adapters.base import AcquireError, ErrorCode, FetchOpts, MediaResult, VideoMeta
+from apps.core import douyin_browser
 
 DOUYIN_HOST_RE = re.compile(r"(v\.douyin\.com|www\.douyin\.com|douyin\.com)/", re.I)
 _SHARE_URL_RE = re.compile(r"https?://[^\s\"'<>]+")
@@ -45,11 +46,14 @@ class DouyinAdapter:
     name = "douyin"
 
     def __init__(self, yt_dlp_path: str = "yt-dlp", ffprobe: str = "ffprobe",
-                 cookie_provider=None, cookie_tmp_dir=None, cookies_from_browser: str = ""):
+                 cookie_provider=None, cookie_tmp_dir=None, cookies_from_browser: str = "",
+                 use_browser: bool = True, browser_path: str = ""):
         self._ytdlp = yt_dlp_path
         self._ffprobe = ffprobe
         self._cookies = cookie_provider
         self._from_browser = (cookies_from_browser or "").strip()
+        self._use_browser = use_browser
+        self._browser_path = (browser_path or "").strip()
         if cookie_tmp_dir:
             self._cookie_dir = Path(cookie_tmp_dir)
         else:
@@ -59,6 +63,17 @@ class DouyinAdapter:
             self._cookie_dir.mkdir(parents=True, exist_ok=True)
         except OSError:
             pass
+
+    def _browser_enabled(self) -> bool:
+        return bool(self._use_browser and douyin_browser.playwright_available())
+
+    @staticmethod
+    def _map_browser_error(e) -> AcquireError:
+        kind = getattr(e, "kind", "internal")
+        msg = getattr(e, "message", str(e))
+        code = {"need_login": ErrorCode.NEED_LOGIN, "blocked": ErrorCode.BLOCKED,
+                "not_found": ErrorCode.NOT_AUTHORIZED}.get(kind, ErrorCode.INTERNAL)
+        return AcquireError(code, f"抖音浏览器解析失败：{msg}", retryable=(kind == "blocked"))
 
     # ---------- 基础 ----------
     async def can_handle(self, url: str) -> bool:
@@ -131,6 +146,17 @@ class DouyinAdapter:
     # ---------- 探测 ----------
     async def probe(self, url: str) -> VideoMeta:
         url = normalize_douyin_url(url)
+        if self._browser_enabled():
+            try:
+                info = await douyin_browser.resolve(url, browser_path=self._browser_path or None)
+                return VideoMeta(
+                    platform="douyin", platform_video_id=info["id"], title=info["title"],
+                    author=info.get("author"), duration_ms=info.get("duration_ms") or 0,
+                    cover_url=info.get("cover"), available_heights=[],
+                    has_subtitle_tracks=False, source_url=url,
+                    extra={"via": "browser"})
+            except Exception as be:  # noqa: BLE001
+                self._last_browser_err = be
         args = [self._ytdlp, "--simulate", "--dump-single-json", "--no-warnings", "--no-playlist"]
         tmp_cookie = None
         if self._cookie_header():
@@ -145,6 +171,9 @@ class DouyinAdapter:
         finally:
             _safe_unlink(tmp_cookie)
         if rc != 0:
+            be = getattr(self, "_last_browser_err", None)
+            if be is not None:
+                raise self._map_browser_error(be)
             raise self._classify(err, out)
         try:
             d = json.loads(out)
@@ -170,6 +199,31 @@ class DouyinAdapter:
         url = normalize_douyin_url(url)
         out_dir = Path(opts.out_dir or ".")
         out_dir.mkdir(parents=True, exist_ok=True)
+        if self._browser_enabled():
+            try:
+                info = await douyin_browser.resolve(url, browser_path=self._browser_path or None)
+                target = out_dir / ((info["id"] or "douyin") + ".mp4")
+                douyin_browser.download(info["play_urls"], target, timeout=opts.timeout_sec)
+                probe = await ffprobe_json(target, self._ffprobe)
+                if probe is None:
+                    raise AcquireError(ErrorCode.MEDIA_INVALID, "下载产物 FFprobe 无法解析")
+                fm = probe.get("format") or {}
+                st = probe.get("streams") or []
+                vv = [s for s in st if s.get("codec_type") == "video"]
+                aa = [s for s in st if s.get("codec_type") == "audio"]
+                return MediaResult(
+                    file_path=target, container=fm.get("format_name") or "unknown",
+                    sha256=sha256_file(target),
+                    declared_duration_ms=int(float(fm.get("duration") or 0) * 1000),
+                    width=vv[0].get("width") if vv else None,
+                    height=vv[0].get("height") if vv else None,
+                    vcodec=vv[0].get("codec_name") if vv else None,
+                    acodec=aa[0].get("codec_name") if aa else None,
+                    has_audio=bool(aa))
+            except AcquireError:
+                raise
+            except Exception as be:  # noqa: BLE001
+                self._last_browser_err = be
         outtmpl = str(out_dir / "%(id)s.%(ext)s")
 
         args = [self._ytdlp, "--no-warnings", "--no-playlist",

@@ -69,6 +69,9 @@ class Settings(BaseSettings):
     # 从浏览器读取 Cookie 传给 yt-dlp（抖音等需要新鲜 Cookie 时用）
     # 取值如 chrome / edge / firefox / brave，留空则不用
     ytdlp_cookies_from_browser: str = ""
+    # 抖音：优先用浏览器解析通道（免 Cookie；需 playwright + 本机 Chrome/Edge）
+    douyin_use_browser: bool = True
+    douyin_browser_path: str = ""     # 空=自动探测；也可指定 chrome/edge 可执行路径
 
     # ASR
     asr_model: str = "small"

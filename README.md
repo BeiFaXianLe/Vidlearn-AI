@@ -249,7 +249,7 @@ VidLearn AI/
 
 ## 6. 重要说明
 
-- **抖音**：已支持（Beta）——基于 yt-dlp 内置 Douyin 解析器，无需自建下载器；部分视频需在导入页粘贴抖音 Cookie 才能高清/绕过风控。
+- **抖音**：已支持——默认走 **Playwright 浏览器解析通道（免 Cookie）**：打开真实页面拦截详情接口取播放地址下载；yt-dlp 兜底。依赖 playwright + 本机 Chrome/Edge。见 [docs/v2/DOUYIN.md](docs/v2/DOUYIN.md)。
 - **模型**：已预置 `models/faster-whisper-small/`；换机/重装见 [docs/v2/MODEL_SETUP.md](docs/v2/MODEL_SETUP.md)。
 - **许可证**：FFmpeg 为 GPL full build，对外分发前需换 LGPL（见 [docs/v2/LICENSE_AUDIT.md](docs/v2/LICENSE_AUDIT.md)）。
 - **字幕标点**：ASR 字幕自动用 LLM 补标点（派生轨，原始字幕保留），见 [docs/v2/PUNCTUATION.md](docs/v2/PUNCTUATION.md)
