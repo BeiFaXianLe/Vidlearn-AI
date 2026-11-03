@@ -204,6 +204,13 @@ export const api = {
   async tasks(limit = 20) {
     return j<any>(await fetch(`${BASE}/api/tasks?limit=${limit}`));
   },
+  async verifyCredential(platform = "bilibili") {
+    return j<any>(await fetch(`${BASE}/api/credentials/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ platform }),
+    }));
+  },
   async credentialStatus(platform = "bilibili") {
     return j<any>(await fetch(`${BASE}/api/credentials/${platform}`));
   },

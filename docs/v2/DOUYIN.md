@@ -34,3 +34,4 @@ https://www.douyin.com/video/7345678901234567890
 
 ## 导入页 Cookie 管理（UI）
 导入弹窗已内置「平台 Cookie」卡片：B站 / 抖音 分页签、各自粘贴与保存、显示「已保存/未配置」、一键清除；粘贴抖音链接会自动切到抖音页签。保存走 \POST /api/credentials {platform, raw}\（加密落盘），仅本机可读。
+另有「检测登录」按钮：B站真实校验（\POST /api/credentials/verify\ 返回用户名），抖音做 Cookie 字段体检（无离线登录接口）。

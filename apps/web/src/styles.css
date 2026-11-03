@@ -298,3 +298,5 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0;backgro
 .ck-head b{font-size:13px;color:#2f3b52}
 .ck-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .ck-actions .meta{font-size:11.5px}
+
+.ck-actions .ck-bad{color:#c33;font-weight:600}

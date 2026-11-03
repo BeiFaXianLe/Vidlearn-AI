@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from apps.adapters import resolve_adapter
 from apps.adapters.base import AcquireError, FetchOpts
 from apps.adapters.bilibili import BilibiliAdapter
+from apps.adapters.douyin import DouyinAdapter
 from apps.core.acquire import AcquisitionManager
 from apps.core.credentials import CredentialError, FileCredentialProvider
 from apps.core.logging_setup import get_logger
@@ -41,6 +42,38 @@ class ImportIn(BaseModel):
 class CookieIn(BaseModel):
     platform: str = "bilibili"
     raw: str
+
+
+class VerifyIn(BaseModel):
+    platform: str = "bilibili"
+
+
+@router.post("/credentials/verify")
+async def verify_credential(body: VerifyIn, request: Request):
+    """检测某平台已保存的 Cookie 是否为有效登录态（B站真实校验；抖音做字段体检）。"""
+    st = _state(request)
+    p = _cred(request)
+    if not p.get(body.platform):
+        return {"ok": False, "platform": body.platform, "message": "未配置 Cookie"}
+    try:
+        if body.platform == "bilibili":
+            ad = BilibiliAdapter(yt_dlp_path=st.settings.yt_dlp_path,
+                                 ffprobe=st.settings.ffprobe_path,
+                                 cookie_provider=p,
+                                 cookie_tmp_dir=st.settings.media.temp / "cookies")
+            r = await ad.verify_login()
+            return {"platform": "bilibili", **r}
+        if body.platform == "douyin":
+            ad = DouyinAdapter(yt_dlp_path=st.settings.yt_dlp_path,
+                               ffprobe=st.settings.ffprobe_path,
+                               cookie_provider=p,
+                               cookie_tmp_dir=st.settings.media.temp / "cookies",
+                               cookies_from_browser=st.settings.ytdlp_cookies_from_browser)
+            r = await ad.verify_login()
+            return {"platform": "douyin", **r}
+        return {"ok": False, "platform": body.platform, "message": "不支持的平台"}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "platform": body.platform, "message": str(e)[:160]}
 
 
 @router.post("/probe")

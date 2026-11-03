@@ -130,3 +130,36 @@ def test_browser_cookie_flag(monkeypatch):
     asyncio.run(ad.probe("https://v.douyin.com/x/"))
     assert "--cookies-from-browser" in captured["args"]
     assert "edge" in captured["args"]
+
+
+def test_verify_login_with_and_without_cookie():
+    class Cred:
+        def __init__(self, ck):
+            self.ck = ck
+
+        def get(self, platform):
+            return self.ck if platform == "douyin" else None
+
+    import asyncio
+    ok = asyncio.run(DouyinAdapter(cookie_provider=Cred({"ttwid": "x", "msToken": "y"})).verify_login())
+    assert ok["ok"] is True and "ttwid" in ok["keys"]
+    bad = asyncio.run(DouyinAdapter(cookie_provider=Cred({"foo": "bar"})).verify_login())
+    assert bad["ok"] is False
+    none = asyncio.run(DouyinAdapter(cookie_provider=None).verify_login())
+    assert none["ok"] is False
+
+
+@pytest.fixture()
+def client():
+    import importlib
+    import apps.main as main_mod
+    importlib.reload(main_mod)
+    from fastapi.testclient import TestClient
+    with TestClient(main_mod.app) as cl:
+        yield cl
+
+
+def test_verify_endpoint_no_cookie(client):
+    r = client.post("/api/credentials/verify", json={"platform": "douyin"})
+    assert r.status_code == 200
+    assert r.json()["ok"] is False

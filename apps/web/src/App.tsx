@@ -1280,6 +1280,7 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
   const [cookies, setCookies] = useState<{ bilibili: string; douyin: string }>({ bilibili: "", douyin: "" });
   const [credSt, setCredSt] = useState<{ bilibili: any; douyin: any }>({ bilibili: null, douyin: null });
   const [cookieTab, setCookieTab] = useState<"bilibili" | "douyin">("bilibili");
+  const [credCheck, setCredCheck] = useState<{ bilibili: any; douyin: any }>({ bilibili: null, douyin: null });
   const [autoAsr, setAutoAsr] = useState(true);
   const [autoPunct, setAutoPunct] = useState(true);
   const [bg, setBg] = useState(true);
@@ -1325,6 +1326,18 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
       show((pf === "bilibili" ? "B站" : "抖音") + " Cookie 已加密保存");
     } catch (e: any) {
       show("保存失败: " + e.message);
+    }
+  }
+
+  async function verifyCookie(pf: "bilibili" | "douyin") {
+    setCredCheck((s) => ({ ...s, [pf]: { pending: true } }));
+    try {
+      const r = await api.verifyCredential(pf);
+      setCredCheck((s) => ({ ...s, [pf]: r }));
+      show(r.ok ? (r.uname ? "登录有效：" + r.uname : "检测通过") : ("未通过：" + (r.message || "")));
+    } catch (e: any) {
+      setCredCheck((s) => ({ ...s, [pf]: { ok: false, message: e.message } }));
+      show("检测失败: " + e.message);
     }
   }
 
@@ -1475,6 +1488,15 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
               保存{cookieTab === "bilibili" ? "B站" : "抖音"} Cookie
             </button>
             <button className="btn" disabled={busy} onClick={() => clearCookie(cookieTab)}>清除</button>
+            <button className="btn" disabled={busy} onClick={() => verifyCookie(cookieTab)}>检测登录</button>
+            {credCheck[cookieTab]?.pending && <span className="meta"><span className="spin" /> 检测中…</span>}
+            {credCheck[cookieTab] && !credCheck[cookieTab].pending && (
+              <span className={"meta" + (credCheck[cookieTab].ok ? "" : " ck-bad")}>
+                {credCheck[cookieTab].ok
+                  ? ("✓ " + (credCheck[cookieTab].uname || credCheck[cookieTab].message || "有效"))
+                  : ("✗ " + (credCheck[cookieTab].message || "无效"))}
+              </span>
+            )}
             <span className="meta">
               {cookieTab === "bilibili"
                 ? "提示：浏览器 F12 → Application → Cookies 复制 SESSDATA"

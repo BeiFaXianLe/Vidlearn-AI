@@ -112,6 +112,22 @@ class DouyinAdapter:
             return AcquireError(ErrorCode.UNSUPPORTED_URL, "无法识别的抖音链接", retryable=False)
         return AcquireError(ErrorCode.INTERNAL, (err or out or "yt-dlp 失败")[:200], retryable=True)
 
+    async def verify_login(self) -> dict:
+        """抖音 Cookie 检查。
+
+        抖音没有稳定的「登录校验」公开接口，这里做**本地合理性检查**：
+        是否存在关键 Cookie（ttwid / msToken / sessionid）。返回 {ok, keys, message}。
+        """
+        ck = self._cookies.get("douyin") if self._cookies else None
+        if not ck:
+            return {"ok": False, "keys": [], "message": "未配置 Cookie"}
+        keys = list(ck.keys())
+        has_core = any(k in ck for k in ("ttwid", "msToken", "sessionid", "sessionid_ss"))
+        if not has_core:
+            return {"ok": False, "keys": keys,
+                    "message": "Cookie 缺少 ttwid/msToken/sessionid 等关键字段"}
+        return {"ok": True, "keys": keys, "message": "已配置（抖音无离线登录校验，导入时以实际解析为准）"}
+
     # ---------- 探测 ----------
     async def probe(self, url: str) -> VideoMeta:
         url = normalize_douyin_url(url)

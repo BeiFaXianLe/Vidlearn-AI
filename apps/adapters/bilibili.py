@@ -293,6 +293,20 @@ class BilibiliAdapter:
         except Exception:
             return None
 
+    async def verify_login(self) -> dict:
+        """检测当前 Cookie 是否为有效登录态：返回 {ok, uname, mid, message}。"""
+        cookie = self._cookie_header()
+        if not cookie:
+            return {"ok": False, "message": "未配置 Cookie"}
+        nav = await self._api_get(NAV_URL, cookie)
+        if not nav or nav.get("code") != 0:
+            return {"ok": False, "message": "Cookie 无效或已过期"}
+        data = nav.get("data") or {}
+        if not data.get("isLogin"):
+            return {"ok": False, "message": "Cookie 未登录（缺 SESSDATA）"}
+        return {"ok": True, "uname": data.get("uname"), "mid": data.get("mid"),
+                "message": "登录有效"}
+
     # ---------- 收藏夹读取（S2 增强：登录态） ----------
     async def fetch_fav_folders(self) -> dict:
         """读取当前登录账号的收藏夹文件夹列表。
