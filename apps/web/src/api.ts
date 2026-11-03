@@ -243,6 +243,21 @@ export const api = {
       })
     );
   },
+  // ---- 抖音 CDP（浏览器自己解密 Cookie，绕开 SQLite 锁与 v20 加密）----
+  async douyinCdpLogin(port?: number) {
+    return j<any>(await fetch(`${BASE}/api/credentials/douyin/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ port }),
+    }));
+  },
+  async douyinCdpCookie(port?: number) {
+    return j<any>(await fetch(`${BASE}/api/credentials/douyin/cdp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ port }),
+    }));
+  },
   // ---- B站收藏夹（登录态批量导入） ----
   async biliFavFolders() {
     return j<any>(await fetch(`${BASE}/api/bilibili/fav/folders`));

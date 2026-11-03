@@ -19,6 +19,9 @@ from pathlib import Path
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
 
+# Playwright 临时目录探测结果缓存（进程内只探一次）
+_TEMP_STATE: dict = {}
+
 
 def playwright_available() -> bool:
     try:
@@ -26,6 +29,56 @@ def playwright_available() -> bool:
         return True
     except Exception:
         return False
+
+
+def _temp_writable(path: str, timeout: float = 1.5) -> bool:
+    """探测目录是否可写。
+
+    受限环境（如服务跑在沙箱里）下，写 %TEMP% 是被**无限挂起**而不是报错，
+    而 os.access 仍返回 True —— 所以必须用线程 + 超时来试写。
+    """
+    import tempfile
+    import threading
+
+    state: dict = {}
+
+    def _w() -> None:
+        try:
+            with tempfile.NamedTemporaryFile(dir=path, prefix="probe_"):
+                state["ok"] = True
+        except Exception:
+            state["ok"] = False
+
+    t = threading.Thread(target=_w, daemon=True)
+    t.start()
+    t.join(timeout)
+    return bool(state.get("ok"))
+
+
+def ensure_playwright_temp() -> str | None:
+    """确保 Playwright 有可写的临时目录。
+
+    Playwright 会在 mkdtemp('...playwright-artifacts-XXXXXX') 建目录，
+    %TEMP% 不可写时直接失败（受限环境里表现为挂起）。这里把 TEMP/TMP
+    改指向项目内 .tmp/pwtmp（driver 继承环境变量），保证浏览器通道可用。
+    """
+    if "dir" in _TEMP_STATE:
+        return _TEMP_STATE["dir"]
+    for key in ("TEMP", "TMP"):
+        d = os.environ.get(key)
+        if d and os.path.isdir(d) and _temp_writable(d):
+            _TEMP_STATE["dir"] = None
+            return None
+    root = Path(__file__).resolve().parents[2] / ".tmp" / "pwtmp"
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        os.environ["TEMP"] = str(root)
+        os.environ["TMP"] = str(root)
+        _TEMP_STATE["dir"] = str(root)
+        return str(root)
+    except OSError:
+        _TEMP_STATE["dir"] = None
+        return None
 
 
 def find_chrome() -> str | None:
@@ -80,26 +133,38 @@ def _pick_play_urls(video: dict) -> list[str]:
 
 
 async def resolve(url: str, *, browser_path: str | None = None,
-                  timeout_ms: int = 30000) -> dict:
-    """返回 {id,title,author,duration_ms,cover,play_urls,raw_aweme_id}。"""
+                  timeout_ms: int = 30000, profile_dir: str | None = None) -> dict:
+    """返回 {id,title,author,duration_ms,cover,play_urls,raw_aweme_id}。
+
+    profile_dir 非空时使用持久化 profile（同一目录复用登录态，扫码登录一次长期有效）。
+    """
     if not playwright_available():
         raise DouyinResolveError("internal", "未安装 playwright")
+    ensure_playwright_temp()
     from playwright.async_api import async_playwright
 
     captured: dict = {}
     async with async_playwright() as p:
-        kwargs = {"headless": True, "args": ["--disable-blink-features=AutomationControlled",
-                                             "--disable-dev-shm-usage"]}
+        launch_options = {"headless": True,
+                          "args": ["--disable-blink-features=AutomationControlled",
+                                   "--disable-dev-shm-usage"]}
+        ctx_options = {"user_agent": UA, "viewport": {"width": 1280, "height": 900},
+                       "locale": "zh-CN"}
         bp = browser_path or find_chrome()
         if bp:
-            kwargs["executable_path"] = bp
+            launch_options["executable_path"] = bp
+        browser = None
         try:
-            browser = await p.chromium.launch(**kwargs)
+            if profile_dir:
+                Path(profile_dir).mkdir(parents=True, exist_ok=True)
+                ctx = await p.chromium.launch_persistent_context(
+                    str(profile_dir), **launch_options, **ctx_options)
+            else:
+                browser = await p.chromium.launch(**launch_options)
+                ctx = await browser.new_context(**ctx_options)
         except Exception as e:
             raise DouyinResolveError("internal", f"启动浏览器失败：{str(e)[:120]}")
-        ctx = await browser.new_context(user_agent=UA, viewport={"width": 1280, "height": 900},
-                                        locale="zh-CN")
-        page = await ctx.new_page()
+        page = await ctx.new_page() if not ctx.pages else ctx.pages[0]
 
         async def on_resp(resp):
             u = resp.url
@@ -138,7 +203,8 @@ async def resolve(url: str, *, browser_path: str | None = None,
                     pass
         try:
             await ctx.close()
-            await browser.close()
+            if browser is not None:
+                await browser.close()
         except Exception:
             pass
 

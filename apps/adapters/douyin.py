@@ -47,13 +47,14 @@ class DouyinAdapter:
 
     def __init__(self, yt_dlp_path: str = "yt-dlp", ffprobe: str = "ffprobe",
                  cookie_provider=None, cookie_tmp_dir=None, cookies_from_browser: str = "",
-                 use_browser: bool = True, browser_path: str = ""):
+                 use_browser: bool = True, browser_path: str = "", profile_dir: str = ""):
         self._ytdlp = yt_dlp_path
         self._ffprobe = ffprobe
         self._cookies = cookie_provider
         self._from_browser = (cookies_from_browser or "").strip()
         self._use_browser = use_browser
         self._browser_path = (browser_path or "").strip()
+        self._profile_dir = (profile_dir or "").strip()
         if cookie_tmp_dir:
             self._cookie_dir = Path(cookie_tmp_dir)
         else:
@@ -148,7 +149,8 @@ class DouyinAdapter:
         url = normalize_douyin_url(url)
         if self._browser_enabled():
             try:
-                info = await douyin_browser.resolve(url, browser_path=self._browser_path or None)
+                info = await douyin_browser.resolve(url, browser_path=self._browser_path or None,
+                                                   profile_dir=self._profile_dir or None)
                 return VideoMeta(
                     platform="douyin", platform_video_id=info["id"], title=info["title"],
                     author=info.get("author"), duration_ms=info.get("duration_ms") or 0,
@@ -201,7 +203,8 @@ class DouyinAdapter:
         out_dir.mkdir(parents=True, exist_ok=True)
         if self._browser_enabled():
             try:
-                info = await douyin_browser.resolve(url, browser_path=self._browser_path or None)
+                info = await douyin_browser.resolve(url, browser_path=self._browser_path or None,
+                                                   profile_dir=self._profile_dir or None)
                 target = out_dir / ((info["id"] or "douyin") + ".mp4")
                 douyin_browser.download(info["play_urls"], target, timeout=opts.timeout_sec)
                 probe = await ffprobe_json(target, self._ffprobe)

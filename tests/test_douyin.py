@@ -126,7 +126,8 @@ def test_browser_cookie_flag(monkeypatch):
 
     monkeypatch.setattr("apps.adapters.douyin.run_cmd", fake_run)
     import asyncio
-    ad = DouyinAdapter(cookies_from_browser="edge", cookie_provider=None)
+    # 关掉浏览器通道：本用例只验证 yt-dlp 的 --cookies-from-browser 参数
+    ad = DouyinAdapter(use_browser=False, cookies_from_browser="edge", cookie_provider=None)
     asyncio.run(ad.probe("https://v.douyin.com/x/"))
     assert "--cookies-from-browser" in captured["args"]
     assert "edge" in captured["args"]
@@ -160,6 +161,7 @@ def client():
 
 
 def test_verify_endpoint_no_cookie(client):
+    client.delete("/api/credentials/douyin")   # 保证从"未配置"状态开始
     r = client.post("/api/credentials/verify", json={"platform": "douyin"})
     assert r.status_code == 200
     assert r.json()["ok"] is False
@@ -180,7 +182,7 @@ def test_pick_play_urls_prefers_and_dedups():
 def test_adapter_uses_browser_channel(monkeypatch, tmp_path):
     import asyncio
 
-    async def fake_resolve(url, browser_path=None, timeout_ms=30000):
+    async def fake_resolve(url, browser_path=None, timeout_ms=30000, profile_dir=None):
         return {"id": "999", "title": "浏览器解析标题", "author": "作者X",
                 "duration_ms": 12345, "cover": "http://c.jpg",
                 "play_urls": ["http://v.mp4"]}

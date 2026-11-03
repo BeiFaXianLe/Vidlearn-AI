@@ -105,8 +105,9 @@ async def verify_credential(body: VerifyIn, request: Request):
                                cookie_provider=p,
                                cookie_tmp_dir=st.settings.media.temp / "cookies",
                                cookies_from_browser=st.settings.ytdlp_cookies_from_browser,
-                             douyin_use_browser=st.settings.douyin_use_browser,
-                             douyin_browser_path=st.settings.douyin_browser_path)
+                               use_browser=st.settings.douyin_use_browser,
+                               browser_path=st.settings.douyin_browser_path,
+                               profile_dir=str(_douyin_profile_dir(st)))
             r = await ad.verify_login()
             return {"platform": "douyin", **r}
         return {"ok": False, "platform": body.platform, "message": "不支持的平台"}
@@ -123,7 +124,8 @@ async def probe(body: ProbeIn, request: Request):
                              cookie_tmp_dir=st.settings.media.temp / "cookies",
                              cookies_from_browser=st.settings.ytdlp_cookies_from_browser,
                              douyin_use_browser=st.settings.douyin_use_browser,
-                             douyin_browser_path=st.settings.douyin_browser_path)
+                             douyin_browser_path=st.settings.douyin_browser_path,
+                             douyin_profile_dir=str(_douyin_profile_dir(st)))
         meta = await ad.probe(body.source)
         return {"ok": True, "meta": meta.__dict__}
     except AcquireError as e:
@@ -139,7 +141,8 @@ async def import_media(body: ImportIn, request: Request):
                              cookie_tmp_dir=st.settings.media.temp / "cookies",
                              cookies_from_browser=st.settings.ytdlp_cookies_from_browser,
                              douyin_use_browser=st.settings.douyin_use_browser,
-                             douyin_browser_path=st.settings.douyin_browser_path)
+                             douyin_browser_path=st.settings.douyin_browser_path,
+                             douyin_profile_dir=str(_douyin_profile_dir(st)))
         mgr = AcquisitionManager(st.settings.media.temp, st.settings.media.original, st.settings.ffmpeg_path)
         res = await mgr.acquire(ad, body.source, max_height=body.max_height,
                                 download_sections=body.download_sections)
@@ -169,6 +172,59 @@ async def get_credential_status(platform: str, request: Request):
     p = _cred(request)
     keys = list((p.get(platform) or {}).keys())
     return {"ok": True, "backend": p.backend, "status": p.status(platform), "keys": keys}
+
+
+class DouyinCDPIn(BaseModel):
+    port: int | None = None
+
+
+def _douyin_profile_dir(st) -> Path:
+    """抖音登录态 profile 目录（扫码登录一次，长期复用）。"""
+    d = (st.settings.douyin_profile_dir or "").strip()
+    return Path(d) if d else Path(st.settings.data_root) / "browsers" / "douyin"
+
+
+@router.post("/credentials/douyin/cdp")
+async def douyin_cdp_cookie(body: DouyinCDPIn, request: Request):
+    """通过 CDP 从本机浏览器采集抖音 Cookie（浏览器自己解密，绕开 SQLite 锁与 v20 加密）。"""
+    from apps.core import douyin_cdp
+
+    st = _state(request)
+    port = body.port or st.settings.douyin_cdp_port
+    try:
+        cookies = await douyin_cdp.export_cookies(port)
+    except douyin_cdp.DouyinCDPError as e:
+        return {"ok": False, "platform": "douyin", "message": str(e)[:200]}
+    except Exception as e:  # noqa: BLE001
+        log.warning("CDP 采集抖音 Cookie 失败: %s", str(e)[:200])
+        return {"ok": False, "platform": "douyin", "message": f"采集失败：{str(e)[:160]}"}
+    if not cookies:
+        return {"ok": False, "platform": "douyin",
+                "message": "浏览器里没有抖音 Cookie（请先在打开的浏览器里访问 douyin.com）"}
+    try:
+        p = _cred(request)
+        p.set("douyin", douyin_cdp.cookie_header(cookies))
+    except CredentialError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"ok": True, "platform": "douyin", "count": len(cookies),
+            "keys": sorted(cookies.keys()), "status": p.status("douyin")}
+
+
+@router.post("/credentials/douyin/login")
+async def douyin_cdp_login(body: DouyinCDPIn, request: Request):
+    """打开一个带调试端口的浏览器窗口，供扫码登录抖音（登录态存进持久化 profile）。"""
+    from apps.core import douyin_cdp
+
+    st = _state(request)
+    port = body.port or st.settings.douyin_cdp_port
+    profile = _douyin_profile_dir(st)
+    try:
+        pid = douyin_cdp.launch_login_browser(str(profile), port)
+    except douyin_cdp.DouyinCDPError as e:
+        return {"ok": False, "platform": "douyin", "message": str(e)[:200]}
+    return {"ok": True, "platform": "douyin", "pid": pid, "port": port,
+            "profile_dir": str(profile),
+            "message": "已打开浏览器窗口：请在窗口里扫码登录抖音，完成后点「CDP 获取」"}
 
 
 @router.delete("/credentials/{platform}")
@@ -218,7 +274,8 @@ async def transcript_tracks(source: str, request: Request):
                              cookie_tmp_dir=st.settings.media.temp / "cookies",
                              cookies_from_browser=st.settings.ytdlp_cookies_from_browser,
                              douyin_use_browser=st.settings.douyin_use_browser,
-                             douyin_browser_path=st.settings.douyin_browser_path)
+                             douyin_browser_path=st.settings.douyin_browser_path,
+                             douyin_profile_dir=str(_douyin_profile_dir(st)))
     if not hasattr(ad, "fetch_subtitles"):
         raise HTTPException(status_code=400, detail="该来源不支持平台字幕")
     r = await ad.fetch_subtitles(source)

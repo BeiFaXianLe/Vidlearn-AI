@@ -1303,6 +1303,7 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
   const [credSt, setCredSt] = useState<{ bilibili: any; douyin: any }>({ bilibili: null, douyin: null });
   const [cookieTab, setCookieTab] = useState<"bilibili" | "douyin">("bilibili");
   const [credCheck, setCredCheck] = useState<{ bilibili: any; douyin: any }>({ bilibili: null, douyin: null });
+  const [cdpBusy, setCdpBusy] = useState(false);
 
   const [favUser, setFavUser] = useState("");
   const [favFolders, setFavFolders] = useState<any[]>([]);
@@ -1367,6 +1368,36 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
       show("已清除");
     } catch (e: any) {
       show("清除失败: " + e.message);
+    }
+  }
+
+  // 抖音 CDP：打开带调试端口的浏览器扫码登录 / 采集 Cookie
+  async function douyinCdpLogin() {
+    setCdpBusy(true);
+    try {
+      const r = await api.douyinCdpLogin();
+      show(r?.ok ? r.message : "启动失败: " + (r?.message || "未知错误"));
+    } catch (e: any) {
+      show("启动浏览器失败: " + e.message);
+    } finally {
+      setCdpBusy(false);
+    }
+  }
+
+  async function douyinCdpFetch() {
+    setCdpBusy(true);
+    try {
+      const r = await api.douyinCdpCookie();
+      if (r?.ok) {
+        setCredSt((s) => ({ ...s, douyin: r }));
+        show(`已采集 ${r.count} 条抖音 Cookie 并加密保存`);
+      } else {
+        show("获取失败: " + (r?.message || "未知错误"));
+      }
+    } catch (e: any) {
+      show("获取失败: " + e.message);
+    } finally {
+      setCdpBusy(false);
     }
   }
 
@@ -1573,6 +1604,14 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
               <button className="btn" disabled={busy} onClick={() => saveCookie(cookieTab)}>保存</button>
               <button className="btn" disabled={busy} onClick={() => verifyCookie(cookieTab)}>检测登录</button>
               <button className="btn" disabled={busy} onClick={() => clearCookie(cookieTab)}>清除</button>
+              {cookieTab === "douyin" && (
+                <>
+                  <button className="btn" disabled={busy || cdpBusy} onClick={douyinCdpLogin}>扫码登录</button>
+                  <button className="btn" disabled={busy || cdpBusy} onClick={douyinCdpFetch}>
+                    {cdpBusy ? <span className="spin" /> : "CDP 获取"}
+                  </button>
+                </>
+              )}
               {credCheck[cookieTab]?.pending && <span className="meta"><span className="spin" /> 检测中…</span>}
               {credCheck[cookieTab] && !credCheck[cookieTab].pending && (
                 <span className={"meta" + (credCheck[cookieTab].ok ? "" : " ck-bad")}>

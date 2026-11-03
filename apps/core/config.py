@@ -72,6 +72,10 @@ class Settings(BaseSettings):
     # 抖音：优先用浏览器解析通道（免 Cookie；需 playwright + 本机 Chrome/Edge）
     douyin_use_browser: bool = True
     douyin_browser_path: str = ""     # 空=自动探测；也可指定 chrome/edge 可执行路径
+    # 抖音 CDP：采集 Cookie 的浏览器调试端口（9222 常被占用，默认 9333）
+    douyin_cdp_port: int = 9333
+    # 抖音登录态 profile 目录（空=默认 data/browsers/douyin；扫码登录一次长期复用）
+    douyin_profile_dir: str = ""
 
     # ASR
     asr_model: str = "small"
