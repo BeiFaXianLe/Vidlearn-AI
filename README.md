@@ -18,6 +18,18 @@ setup.cmd            # 双击，或在 PowerShell 里：powershell -ExecutionPol
 run.cmd             # 双击；默认 http://127.0.0.1:8000
 ```
 
+### 前置依赖
+
+| 依赖 | 版本 | 说明 |
+|---|---|---|
+| Python | **3.12**（3.14 太新，部分 ML 轮子不支持） | 运行后端 |
+| [uv](https://docs.astral.sh/uv/) | 最新 | 建虚拟环境/装依赖（可选，setup 会自动回退 pip） |
+| FFmpeg / FFprobe | 5.0+ | 媒体探测、转码、抽音频（需在 PATH） |
+| yt-dlp | 2026.10+ | 下载器（`uv tool install yt-dlp`） |
+| Node.js + pnpm | Node 18+ / pnpm 8+ | 构建前端（仅首次构建需要） |
+
+> setup.cmd 会检查并提示缺失项。也可手动 `uv sync` 后 `.venv\Scripts\python -m uvicorn apps.main:app`。
+
 > PowerShell 提示"未数字签名"是执行策略限制，用 `setup.cmd` / `run.cmd` 即可绕过，无需改系统策略。
 
 ---
@@ -28,13 +40,16 @@ run.cmd             # 双击；默认 http://127.0.0.1:8000
 VidLearn AI/
 ├── apps/                  ← 【代码】后端应用（Python）
 │   ├── main.py            FastAPI 入口、路由注册、静态前端托管
-│   ├── api_s2.py ~ api_s7.py   各阶段 REST API
+│   ├── api_s2~s7.py      各阶段 REST API（获取/入库/ASR/AI/播放/库）
+│   ├── api_s5_punct.py   字幕标点恢复
+│   ├── api_s6_media.py   HTTP Range 媒体播放
+│   ├── api_v2_ext.py     磁盘/收藏夹/批量导入/任务控制/问答
 │   ├── core/              业务核心：配置/凭证/任务/完整性/字幕/ASR/AI/入库
 │   ├── adapters/          视频来源适配器（B站 / 本地文件）
 │   ├── storage/           SQLite schema 与数据访问层
 │   └── web/               【代码】前端（React + Vite）
 │       ├── src/           源码（App.tsx / api.ts / styles.css）
-│       └── dist/          构建产物（FastAPI 托管的静态文件）
+│       └── dist/          构建产物（FastAPI 托管；**未提交**，需 setup 构建）
 │
 ├── data/                  ← 【运行时数据】程序生成，可备份/清空，勿手改
 │   ├── database/          SQLite 数据库 vidlearn.db
@@ -105,9 +120,16 @@ VidLearn AI/
 7. **批量导入**：一次最多 20 条，后台排队执行，支持暂停/继续/重试/取消。
 8. **自定义收藏夹**：可建多个命名收藏夹，卡片 ☆ 勾选归属（支持多归属），侧边栏「我的收藏」按收藏夹筛选/重命名/删除。
 9. **AI 问答**：基于字幕的流式问答（打字机效果），回答中的时间点可点击跳转。
+10. **繁简转换**：字幕入库统一转简体（OpenCC t2s），存量可用 `scripts/simplify_captions.py` 迁移。
+11. **字幕分段展示**：逐句字幕按停顿/标点合并成段落显示（库内仍保留细粒度用于精确定位）。
+12. **工作台交互**：播放器滚动时吸顶、章节与字幕合并为同一 Tab、点击章节定位字幕块。
 
 > 已有视频想补字幕：详情页「章节与字幕」Tab →「运行本地 ASR 生成字幕」。
 > 详细说明见 [docs/v2/V2_FEATURES.md](docs/v2/V2_FEATURES.md)。
+
+**数据模型（SQLite，启动自动迁移）**：`videos` / `media_assets` / `source_captions` / `transcript_segments` /
+`summaries` / `chapters` / `knowledge_points` / `notes` / `learning_progress` /
+`collections` / `video_collections` / `processing_tasks` / `app_settings`
 
 ---
 
@@ -116,6 +138,7 @@ VidLearn AI/
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests -q
 ```
+当前共 **167 个单元测试**（含字幕、完整性、ASR、标点、收藏夹、Cookie 安全等）。
 
 维护（清理孤儿媒体、历史临时文件）：
 ```powershell
