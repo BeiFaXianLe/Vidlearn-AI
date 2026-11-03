@@ -187,6 +187,14 @@ export const api = {
     return j<any>(await fetch(`${BASE}/api/videos/${videoId}/collections`));
   },
   // ---- 批量导入 ----
+  async uploadFiles(files: File[]) {
+    const fd = new FormData();
+    files.forEach((f) => fd.append("files", f));
+    const r = await fetch(`${BASE}/api/upload`, { method: "POST", body: fd });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.detail || "上传失败");
+    return d;
+  },
   async intakeBatch(sources: string[], opts: any = {}) {
     const r = await fetch(`${BASE}/api/intake/batch`, {
       method: "POST",

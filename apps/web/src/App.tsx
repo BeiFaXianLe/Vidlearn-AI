@@ -1286,20 +1286,24 @@ function Detail({ id, onBack, show }: { id: string; onBack: () => void; show: (m
 }
 
 function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: () => void; show: (m: string) => void }) {
+  const [mode, setMode] = useState<"link" | "local">("link");
   const [text, setText] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const [dragging, setDragging] = useState(false);
   const [maxHeight, setMaxHeight] = useState<number | "">("");
+  const [autoAsr, setAutoAsr] = useState(true);
+  const [autoPunct, setAutoPunct] = useState(true);
+  const [bg, setBg] = useState(true);
+  const [advOpen, setAdvOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [stage, setStage] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
   const [cookies, setCookies] = useState<{ bilibili: string; douyin: string }>({ bilibili: "", douyin: "" });
   const [credSt, setCredSt] = useState<{ bilibili: any; douyin: any }>({ bilibili: null, douyin: null });
   const [cookieTab, setCookieTab] = useState<"bilibili" | "douyin">("bilibili");
   const [credCheck, setCredCheck] = useState<{ bilibili: any; douyin: any }>({ bilibili: null, douyin: null });
-  const [autoAsr, setAutoAsr] = useState(true);
-  const [autoPunct, setAutoPunct] = useState(true);
-  const [bg, setBg] = useState(true);
-  const [busy, setBusy] = useState(false);
 
-  const sources = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-
-  // ---- B站收藏夹（登录态） ----
   const [favUser, setFavUser] = useState("");
   const [favFolders, setFavFolders] = useState<any[]>([]);
   const [favLoading, setFavLoading] = useState(false);
@@ -1308,6 +1312,9 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
   const [favSel, setFavSel] = useState<string[]>([]);
   const [favPage, setFavPage] = useState(1);
   const [favHasMore, setFavHasMore] = useState(false);
+
+  const sources = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  const totalMB = files.reduce((a, f) => a + f.size, 0) / 1024 / 1024;
 
   useEffect(() => {
     (async () => {
@@ -1320,7 +1327,6 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
     })();
   }, []);
 
-  // 粘贴链接后自动切到对应平台的 Cookie 页签
   useEffect(() => {
     const j = text.toLowerCase();
     if (j.includes("douyin.com")) setCookieTab("douyin");
@@ -1365,7 +1371,7 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
   }
 
   async function loadFavFolders() {
-    if (!cookies.bilibili.trim()) return show("请先在「平台 Cookie → B站」粘贴含 SESSDATA 的 Cookie");
+    if (!cookies.bilibili.trim()) return show("请先在下方「B站 Cookie」粘贴含 SESSDATA 的 Cookie");
     setFavLoading(true);
     try {
       await api.setCredential(cookies.bilibili.trim(), "bilibili");
@@ -1407,18 +1413,36 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
     submit(false, list);
   }
 
+  function addFiles(fl: FileList | null) {
+    if (!fl) return;
+    const ok = Array.from(fl).filter((f) => f.type.startsWith("video/") || /\.(mp4|mkv|mov|webm|m4v|avi|flv|wmv|m4a|mp3|wav|aac)$/i.test(f.name));
+    if (!ok.length) return show("请选择视频文件");
+    setFiles((prev) => [...prev, ...ok]);
+  }
+
   async function submit(force = false, explicit?: string[]) {
-    const list = explicit && explicit.length ? explicit : sources;
-    if (!list.length) return show("请至少粘贴一个链接或文件路径");
-    if (list.length > 20) return show("单次最多 20 条，请分批导入");
+    if (busy) return;
     setBusy(true);
     try {
-      let anyCookie = false;
-      for (const pf of ["bilibili", "douyin"] as const) {
-        const raw = cookies[pf].trim();
-        if (raw) { await api.setCredential(raw, pf); anyCookie = true; }
+      let list: string[] = [];
+      if (explicit && explicit.length) list = explicit;
+      else if (mode === "local") {
+        if (!files.length) { show("请选择本地视频文件"); return; }
+        setStage("上传文件…");
+        const up = await api.uploadFiles(files);
+        list = (up.files || []).map((f: any) => f.path);
+      } else {
+        list = sources;
       }
-      if (anyCookie) show("Cookie 已加密保存");
+      if (!list.length) { show(mode === "local" ? "请选择本地视频文件" : "请至少粘贴一个链接"); return; }
+      if (list.length > 20) { show("单次最多 20 条，请分批导入"); return; }
+      try {
+        for (const pf of ["bilibili", "douyin"] as const) {
+          const raw = cookies[pf].trim();
+          if (raw) await api.setCredential(raw, pf);
+        }
+      } catch {}
+      setStage("提交导入…");
       const opts: any = {
         max_height: maxHeight === "" ? undefined : maxHeight,
         auto_asr: autoAsr,
@@ -1430,165 +1454,186 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
       onDone();
     } catch (e: any) {
       const msg = String(e.message || "");
-      if (msg.includes("超过阈值")) {
+      if (msg.includes("超过阈值") && !force) {
         if (confirm(msg + "\n\n仍要强制导入吗？")) {
-          setBusy(false);
-          return submit(true);
+          setBusy(false); setStage("");
+          return submit(true, explicit);
         }
       } else {
         show("导入失败: " + msg);
       }
     } finally {
       setBusy(false);
+      setStage("");
     }
   }
 
+  const activeCount = mode === "local" ? files.length : sources.length;
+
   return (
     <div className="modalback" onClick={(e) => e.target === e.currentTarget && !busy && onClose()}>
-      <div className="modal">
-        <h2>批量导入视频</h2>
-        <p>粘贴 <b>B站 / 抖音</b> 链接或本地文件路径，<b>每行一个</b>。提交后在后台排队处理，可以离开当前页面。</p>
-        <textarea
-          className="importarea"
-          placeholder={"https://www.bilibili.com/video/BV1xx411c7mD\nhttps://v.douyin.com/iRxAbcDe/\nD:\\\\videos\\\\local.mp4"}
-          value={text}
-          disabled={busy}
-          onChange={(e) => setText(e.target.value)}
-        />
-        <div className="meta" style={{ marginBottom: 8 }}>
-          已识别 <b>{sources.length}</b> 条（单次最多 20 条）　·　最高清晰度：
-          <select
-            value={maxHeight}
-            disabled={busy}
-            onChange={(e) => setMaxHeight(e.target.value === "" ? "" : Number(e.target.value))}
-            style={{ width: "auto", display: "inline-block", padding: "6px 10px", margin: 0 }}
-          >
-            <option value="">自动</option>
-            <option value={1080}>1080P</option>
-            <option value={720}>720P</option>
-            <option value={480}>480P</option>
-            <option value={360}>360P</option>
-          </select>
+      <div className="modal im-modal">
+        <div className="im-head">
+          <h2>导入视频</h2>
+          <button className="im-x" onClick={onClose} disabled={busy} aria-label="关闭">×</button>
         </div>
-        <div className="cookiecard">
-          <div className="ck-head">
-            <b>平台 Cookie</b>
-            <div className="chiprow" style={{ margin: 0 }}>
-              {(["bilibili", "douyin"] as const).map((pf) => (
-                <button key={pf} className={"chip" + (cookieTab === pf ? " active" : "")} onClick={() => setCookieTab(pf)}>
-                  {pf === "bilibili" ? "B站" : "抖音"}{credSt[pf]?.status === "valid" ? " ✓" : ""}
-                </button>
-              ))}
-            </div>
-            <span className="meta" style={{ marginLeft: "auto" }}>
-              {credSt[cookieTab]?.status === "valid" ? "已保存（加密）✓" : "未配置"}
-            </span>
+
+        <div className="im-seg">
+          <button className={"im-seg-btn" + (mode === "link" ? " on" : "")} onClick={() => setMode("link")} disabled={busy}>链接导入</button>
+          <button className={"im-seg-btn" + (mode === "local" ? " on" : "")} onClick={() => setMode("local")} disabled={busy}>本地文件</button>
+        </div>
+
+        {mode === "link" ? (
+          <div className="im-canvas">
+            <textarea
+              className="im-input"
+              placeholder={"每行一个链接，支持 B站 / 抖音\nhttps://www.bilibili.com/video/BV1xx411c7mD\nhttps://v.douyin.com/iRxAbcDe/"}
+              value={text}
+              disabled={busy}
+              onChange={(e) => setText(e.target.value)}
+              autoFocus
+            />
+            <div className="im-summary">已识别 <b>{sources.length}</b> 个链接（单次最多 20 个）</div>
           </div>
-          <textarea
-            className="importarea"
-            style={{ minHeight: 56, margin: "6px 0" }}
-            placeholder={cookieTab === "bilibili"
-              ? "B站：粘贴 SESSDATA 或完整 Cookie（用于平台字幕 / 高清 / 收藏夹）"
-              : "抖音：粘贴完整 Cookie（含 ttwid、msToken、sessionid 等；抖音风控需要新鲜 Cookie）"}
-            value={cookies[cookieTab]}
-            disabled={busy}
-            onChange={(e) => setCookies((s) => ({ ...s, [cookieTab]: e.target.value }))}
-          />
-          <div className="ck-actions">
-            <button className="btn" disabled={busy} onClick={() => saveCookie(cookieTab)}>
-              保存{cookieTab === "bilibili" ? "B站" : "抖音"} Cookie
-            </button>
-            <button className="btn" disabled={busy} onClick={() => clearCookie(cookieTab)}>清除</button>
-            <button className="btn" disabled={busy} onClick={() => verifyCookie(cookieTab)}>检测登录</button>
-            {credCheck[cookieTab]?.pending && <span className="meta"><span className="spin" /> 检测中…</span>}
-            {credCheck[cookieTab] && !credCheck[cookieTab].pending && (
-              <span className={"meta" + (credCheck[cookieTab].ok ? "" : " ck-bad")}>
-                {credCheck[cookieTab].ok
-                  ? ("✓ " + (credCheck[cookieTab].uname || credCheck[cookieTab].message || "有效"))
-                  : ("✗ " + (credCheck[cookieTab].message || "无效"))}
-              </span>
+        ) : (
+          <div className="im-canvas">
+            <div
+              className={"im-drop" + (dragging ? " drag" : "")}
+              onClick={() => fileRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={(e) => { e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files); }}
+            >
+              <div className="im-drop-icon">⤓</div>
+              <div className="im-drop-title">拖拽视频到这里，或点击选择文件</div>
+              <div className="im-drop-sub">支持 mp4 / mkv / mov / webm 等，可多选</div>
+              <input
+                ref={fileRef}
+                type="file"
+                multiple
+                accept="video/*,.mkv,.mov,.m4v"
+                style={{ display: "none" }}
+                onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }}
+              />
+            </div>
+            {files.length > 0 && (
+              <div className="im-summary">
+                已选 <b>{files.length}</b> 个文件 · 共 {totalMB.toFixed(1)} MB
+                <button className="im-clear" onClick={() => setFiles([])} disabled={busy}>清空</button>
+              </div>
             )}
-            <span className="meta">
-              {cookieTab === "bilibili"
-                ? "提示：浏览器 F12 → Application → Cookies 复制 SESSDATA"
-                : "提示：先登录 douyin.com，F12 → Network 任一请求复制完整 Cookie"}
-            </span>
           </div>
-        </div>
-        <div style={{ border: "1px solid #e3e6ee", borderRadius: 10, padding: 10, marginBottom: 10 }}>
-          <div className="meta" style={{ marginBottom: 8 }}>
-            <b>从 B站收藏夹导入</b>　·　先粘贴含 SESSDATA 的 Cookie，再读取你的收藏夹
-          </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <button className="btn" onClick={loadFavFolders} disabled={busy || favLoading}>
-              {favLoading ? <span className="spin" /> : "读取我的收藏夹"}
-            </button>
-            {favUser && <span className="meta">已登录：{favUser}</span>}
-          </div>
-          {favFolders.length > 0 && (
-            <div className="chiprow" style={{ marginTop: 10 }}>
-              {favFolders.map((f) => (
-                <button
-                  key={f.id}
-                  className={"chip" + (activeFolder?.id === f.id ? " active" : "")}
-                  onClick={() => { setFavSel([]); openFolder(f, 1); }}
-                >
-                  {f.title} <b>{f.count ?? 0}</b>
-                </button>
-              ))}
+        )}
+
+        <button className="im-adv-toggle" onClick={() => setAdvOpen((v) => !v)}>
+          {advOpen ? "▾" : "▸"} 更多选项（清晰度 / 后台执行 / 识别与标点 / 平台 Cookie / B站收藏夹）
+        </button>
+
+        {advOpen && (
+          <div className="im-adv">
+            <div className="im-row">
+              <label>最高清晰度</label>
+              <select value={maxHeight} disabled={busy}
+                onChange={(e) => setMaxHeight(e.target.value === "" ? "" : Number(e.target.value))}>
+                <option value="">自动</option>
+                <option value={1080}>1080P</option>
+                <option value={720}>720P</option>
+                <option value={480}>480P</option>
+                <option value={360}>360P</option>
+              </select>
             </div>
-          )}
-          {activeFolder && (
-            <div style={{ marginTop: 10 }}>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
-                <span className="meta">共 {activeFolder.count ?? favItems.length} 个　·　已选 {favSel.length}</span>
-                <button className="chip" onClick={() => setFavSel(favItems.map((x) => x.bvid))}>全选本页</button>
-                <button className="chip" onClick={() => setFavSel([])}>清空</button>
-                <button className="btn primary" disabled={busy || !favSel.length} onClick={importFavSelected}>
-                  导入选中（{favSel.length}）
-                </button>
-              </div>
-              <div style={{ maxHeight: 200, overflowY: "auto" }}>
-                {favItems.map((it) => (
-                  <label key={it.bvid} className="checkline" title={it.title}>
-                    <input
-                      type="checkbox"
-                      checked={favSel.includes(it.bvid)}
-                      disabled={busy}
-                      onChange={() => toggleFavItem(it.bvid)}
-                    />
-                    <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {it.title}
-                    </span>
-                    <span className="meta" style={{ marginLeft: 8 }}>{fmtTime((it.duration_s || 0) * 1000)}</span>
-                  </label>
+            <label className="im-check"><input type="checkbox" checked={bg} disabled={busy} onChange={(e) => setBg(e.target.checked)} /> 后台执行（可离开页面）</label>
+            <label className="im-check"><input type="checkbox" checked={autoAsr} disabled={busy} onChange={(e) => setAutoAsr(e.target.checked)} /> 无字幕时自动用本地 faster-whisper 识别</label>
+            <label className="im-check"><input type="checkbox" checked={autoPunct} disabled={busy} onChange={(e) => setAutoPunct(e.target.checked)} /> 自动补标点（云端 AI，仅发送字幕文本）</label>
+
+            <div className="im-divider">平台 Cookie（可选）</div>
+            <div className="ck-head">
+              <div className="chiprow" style={{ margin: 0 }}>
+                {(["bilibili", "douyin"] as const).map((pf) => (
+                  <button key={pf} className={"chip" + (cookieTab === pf ? " active" : "")} onClick={() => setCookieTab(pf)}>
+                    {pf === "bilibili" ? "B站" : "抖音"}{credSt[pf]?.status === "valid" ? " ✓" : ""}
+                  </button>
                 ))}
-                {favItems.length === 0 && <div className="muted" style={{ padding: "6px 0" }}>该收藏夹为空</div>}
               </div>
-              {favHasMore && (
-                <button className="chip" disabled={favLoading} onClick={() => openFolder(activeFolder, favPage + 1)}>
-                  {favLoading ? "加载中…" : "加载更多"}
-                </button>
+              <span className="meta" style={{ marginLeft: "auto" }}>
+                {credSt[cookieTab]?.status === "valid" ? "已保存（加密）✓" : "未配置"}
+              </span>
+            </div>
+            <textarea
+              className="im-input"
+              style={{ minHeight: 48, margin: "6px 0" }}
+              placeholder={cookieTab === "bilibili"
+                ? "B站：粘贴 SESSDATA 或完整 Cookie"
+                : "抖音：粘贴完整 Cookie（ttwid / msToken / sessionid…）"}
+              value={cookies[cookieTab]}
+              disabled={busy}
+              onChange={(e) => setCookies((s) => ({ ...s, [cookieTab]: e.target.value }))}
+            />
+            <div className="ck-actions">
+              <button className="btn" disabled={busy} onClick={() => saveCookie(cookieTab)}>保存</button>
+              <button className="btn" disabled={busy} onClick={() => verifyCookie(cookieTab)}>检测登录</button>
+              <button className="btn" disabled={busy} onClick={() => clearCookie(cookieTab)}>清除</button>
+              {credCheck[cookieTab]?.pending && <span className="meta"><span className="spin" /> 检测中…</span>}
+              {credCheck[cookieTab] && !credCheck[cookieTab].pending && (
+                <span className={"meta" + (credCheck[cookieTab].ok ? "" : " ck-bad")}>
+                  {credCheck[cookieTab].ok ? ("✓ " + (credCheck[cookieTab].uname || credCheck[cookieTab].message || "有效"))
+                    : ("✗ " + (credCheck[cookieTab].message || "无效"))}
+                </span>
               )}
             </div>
-          )}
-        </div>
-        <label className="checkline">
-          <input type="checkbox" checked={bg} disabled={busy} onChange={(e) => setBg(e.target.checked)} />
-          提交后立即在后台执行（可离开页面）
-        </label>
-        <label className="checkline">
-          <input type="checkbox" checked={autoAsr} disabled={busy} onChange={(e) => setAutoAsr(e.target.checked)} />
-          无字幕时自动用本地 faster-whisper 识别
-        </label>
-        <label className="checkline">
-          <input type="checkbox" checked={autoPunct} disabled={busy} onChange={(e) => setAutoPunct(e.target.checked)} />
-          为识别出的字幕自动补标点（云端 AI，仅发送字幕文本）
-        </label>
-        <div className="modalfoot">
+
+            <div className="im-divider">从 B站收藏夹导入</div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <button className="btn" onClick={loadFavFolders} disabled={busy || favLoading}>
+                {favLoading ? <span className="spin" /> : "读取我的收藏夹"}
+              </button>
+              {favUser && <span className="meta">已登录：{favUser}</span>}
+            </div>
+            {favFolders.length > 0 && (
+              <div className="chiprow" style={{ marginTop: 8 }}>
+                {favFolders.map((f) => (
+                  <button key={f.id} className={"chip" + (activeFolder?.id === f.id ? " active" : "")}
+                    onClick={() => { setFavSel([]); openFolder(f, 1); }}>
+                    {f.title} <b>{f.count ?? 0}</b>
+                  </button>
+                ))}
+              </div>
+            )}
+            {activeFolder && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
+                  <span className="meta">共 {activeFolder.count ?? favItems.length} 个 · 已选 {favSel.length}</span>
+                  <button className="chip" onClick={() => setFavSel(favItems.map((x) => x.bvid))}>全选本页</button>
+                  <button className="chip" onClick={() => setFavSel([])}>清空</button>
+                  <button className="btn soft" disabled={busy || !favSel.length} onClick={importFavSelected}>
+                    导入选中（{favSel.length}）
+                  </button>
+                </div>
+                <div style={{ maxHeight: 180, overflowY: "auto" }}>
+                  {favItems.map((it) => (
+                    <label key={it.bvid} className="checkline" title={it.title}>
+                      <input type="checkbox" checked={favSel.includes(it.bvid)} disabled={busy} onChange={() => toggleFavItem(it.bvid)} />
+                      <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.title}</span>
+                      <span className="meta" style={{ marginLeft: 8 }}>{fmtTime((it.duration_s || 0) * 1000)}</span>
+                    </label>
+                  ))}
+                  {favItems.length === 0 && <div className="muted" style={{ padding: "6px 0" }}>该收藏夹为空</div>}
+                </div>
+                {favHasMore && (
+                  <button className="chip" disabled={favLoading} onClick={() => openFolder(activeFolder, favPage + 1)}>
+                    {favLoading ? "加载中…" : "加载更多"}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="im-foot">
+          <span className="im-stage">{busy ? <><span className="spin" /> {stage}</> : ""}</span>
           <button className="btn" onClick={onClose} disabled={busy}>取消</button>
-          <button className="btn primary" onClick={() => submit(false)} disabled={busy}>
-            {busy ? <span className="spin" /> : `开始导入${sources.length ? "（" + sources.length + "）" : ""}`}
+          <button className="btn primary" onClick={() => submit(false)} disabled={busy || activeCount === 0}>
+            {busy ? "处理中…" : (activeCount ? `开始导入（${activeCount}）` : "开始导入")}
           </button>
         </div>
       </div>

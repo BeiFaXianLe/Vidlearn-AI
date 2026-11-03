@@ -3,7 +3,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request
+import re
+import uuid
+
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
 from apps.adapters import resolve_adapter
@@ -42,6 +45,39 @@ class ImportIn(BaseModel):
 class CookieIn(BaseModel):
     platform: str = "bilibili"
     raw: str
+
+
+@router.post("/upload")
+async def upload_files(request: Request, files: list[UploadFile] = File(...)):
+    """接收本地视频文件（浏览器选文件上传），保存到受控临时目录，返回绝对路径供入库使用。"""
+    st = _state(request)
+    limit = int(getattr(st.settings, "max_upload_mb", 4096)) * 1024 * 1024
+    up = st.settings.media.temp / "uploads"
+    up.mkdir(parents=True, exist_ok=True)
+    out = []
+    for f in files:
+        name = re.sub(r"[^\w.\-\u4e00-\u9fff]+", "_", Path(f.filename or "video").name) or "video"
+        dest = up / f"{uuid.uuid4().hex[:10]}_{name}"
+        size = 0
+        try:
+            with open(dest, "wb") as w:
+                while True:
+                    chunk = await f.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    size += len(chunk)
+                    if size > limit:
+                        raise HTTPException(status_code=413,
+                                            detail=f"文件超过上限 {st.settings.max_upload_mb} MB")
+                    w.write(chunk)
+        except HTTPException:
+            try:
+                dest.unlink(missing_ok=True)
+            except OSError:
+                pass
+            raise
+        out.append({"name": f.filename, "path": str(dest), "size": size})
+    return {"ok": True, "files": out}
 
 
 class VerifyIn(BaseModel):
