@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VidLearn AI · 视频知识工作台</title>
+<style>
+:root{--bg:#f5f7fb;--panel:#fff;--ink:#172033;--muted:#7d8799;--line:#e8ecf3;--blue:#536dfe;--blue2:#eef1ff;--green:#20a779;--orange:#f0a34a;--shadow:0 8px 28px rgba(26,42,78,.06);--radius:16px}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 Inter,"PingFang SC","Microsoft YaHei",sans-serif}
+button,input{font:inherit}button{cursor:pointer;border:0}.app{display:flex;min-height:100vh}.sidebar{width:232px;background:#fff;border-right:1px solid var(--line);padding:24px 16px;position:fixed;inset:0 auto 0 0;z-index:5;display:flex;flex-direction:column}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;padding:0 10px 28px}.logo{width:34px;height:34px;border-radius:11px;background:linear-gradient(135deg,#657cff,#8b6bff);display:grid;place-items:center;color:white;font-size:17px;box-shadow:0 6px 14px #7182ff55}
+.navlabel{font-size:11px;color:#a0a8b6;font-weight:700;letter-spacing:1px;padding:12px 12px 8px}.nav{display:flex;align-items:center;gap:12px;padding:11px 12px;margin:2px 0;border-radius:10px;color:#697487;text-decoration:none;font-weight:600;cursor:pointer}.nav.active,.nav:hover{background:var(--blue2);color:var(--blue)}.nav .ico{width:18px;text-align:center;font-size:16px}.side-bottom{margin-top:auto}.profile{display:flex;align-items:center;gap:10px;padding:14px 10px;border-top:1px solid var(--line);margin-top:18px}.avatar{width:34px;height:34px;border-radius:50%;background:#e8eaff;color:#536dfe;display:grid;place-items:center;font-weight:800}.profile small{display:block;color:var(--muted);font-size:11px}
+.main{margin-left:232px;width:calc(100% - 232px);padding:26px 34px 50px;max-width:1700px}.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}.crumb{color:var(--muted);font-size:13px}.top-actions{display:flex;gap:10px;align-items:center}.iconbtn,.btn{border:1px solid var(--line);background:#fff;color:#465166;border-radius:10px;padding:9px 13px}.btn.primary{background:var(--blue);border-color:var(--blue);color:white;box-shadow:0 5px 12px #536dfe30}.btn.soft{background:var(--blue2);border-color:transparent;color:var(--blue)}.btn.small{padding:7px 10px;font-size:12px}.pagehead{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:22px}.eyebrow{color:var(--blue);font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase}.pagehead h1{font-size:28px;line-height:1.2;margin:5px 0 7px;letter-spacing:-.6px}.sub{color:var(--muted);margin:0}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}.stat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow)}.stat .label{color:var(--muted);font-size:12px}.stat strong{display:block;font-size:25px;margin:5px 0 2px}.stat em{font-style:normal;color:var(--green);font-size:11px}
+.toolbar{display:flex;align-items:center;gap:10px;margin:18px 0}.search{position:relative;flex:1;max-width:390px}.search input{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px 10px 36px;background:white;outline:none}.search span{position:absolute;left:12px;top:9px;color:#98a1b1}.chip{border:1px solid var(--line);border-radius:9px;background:#fff;color:#657084;padding:8px 12px;font-size:12px}.chip.selected{background:var(--blue2);border-color:#dfe4ff;color:var(--blue)}
+.sectionline{display:flex;align-items:center;justify-content:space-between;margin:22px 0 13px}.sectionline h2{font-size:16px;margin:0}.muted{color:var(--muted);font-size:12px}
+.continue{display:grid;grid-template-columns:190px 1fr auto;gap:18px;align-items:center;background:linear-gradient(105deg,#fff,#f8f9ff);border:1px solid #e4e8ff;border-radius:16px;padding:14px 18px;margin-bottom:25px}.thumb{height:112px;border-radius:11px;background:linear-gradient(135deg,#273b69,#6b8dbe);position:relative;overflow:hidden;color:white;display:flex;align-items:flex-end;padding:12px;font-weight:700}.thumb:before{content:"";position:absolute;width:130px;height:130px;border-radius:50%;background:#ffffff18;right:-20px;top:-40px}.play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:38px;height:38px;background:#ffffffdc;border-radius:50%;display:grid;place-items:center;color:#4259c9;padding-left:3px}.continue h3{margin:4px 0 7px;font-size:15px}.progress{height:6px;background:#edf0f6;border-radius:8px;overflow:hidden;margin:10px 0 5px}.progress i{display:block;height:100%;background:var(--blue);border-radius:8px}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:17px}.video-card{background:#fff;border:1px solid var(--line);border-radius:15px;overflow:hidden;box-shadow:var(--shadow);cursor:pointer;transition:.18s}.video-card:hover{transform:translateY(-3px);box-shadow:0 12px 28px #24365c12}.cover{height:158px;position:relative;display:flex;align-items:center;justify-content:center;color:white;font-size:38px;overflow:hidden}.cover:after{content:"";position:absolute;inset:0;background:linear-gradient(135deg,#101c3b33,#101c3b88)}.cover .covertext{z-index:1;font-size:17px;font-weight:800;text-align:center;padding:15px}.duration{position:absolute;z-index:2;right:10px;bottom:9px;background:#111a;color:white;border-radius:5px;padding:2px 6px;font-size:10px}.platform{position:absolute;z-index:2;left:10px;top:10px;background:#ffffffeb;color:#4d5b70;border-radius:6px;padding:4px 7px;font-size:10px;font-weight:700}.cardbody{padding:13px 14px 14px}.cardbody h3{font-size:14px;line-height:1.45;margin:0 0 7px;min-height:40px}.meta{font-size:11px;color:var(--muted);display:flex;gap:8px;align-items:center}.tags{display:flex;gap:6px;margin-top:11px}.tag{font-size:10px;background:#f3f5f9;color:#758094;padding:4px 7px;border-radius:5px}.tag.ai{background:#edf8f4;color:#15966c}.empty{padding:50px;text-align:center;color:var(--muted);display:none}
+.detail{display:none}.detail.show{display:block}.home.hide{display:none}.detail-head{display:flex;align-items:center;gap:12px;margin-bottom:17px}.back{background:none;color:#66728a;padding:5px 0}.detail-title{font-size:20px;font-weight:800;flex:1}.detail-meta{color:var(--muted);font-size:12px}.workspace{display:grid;grid-template-columns:minmax(430px,1.25fr) minmax(400px,1fr);gap:18px;align-items:start}.leftcol,.rightcol{min-width:0}.player{background:#101827;border-radius:15px;overflow:hidden;box-shadow:var(--shadow)}.player-screen{height:365px;display:grid;place-items:center;color:white;background:radial-gradient(circle at 70% 30%,#4669a6,#172846 50%,#0d1728);position:relative}.player-screen:before{content:"";position:absolute;width:280px;height:280px;border:1px solid #ffffff18;border-radius:50%}.player-center{text-align:center;z-index:1}.bigplay{width:66px;height:66px;border-radius:50%;background:#ffffffed;color:#536dfe;display:grid;place-items:center;margin:0 auto 12px;font-size:25px;padding-left:4px}.player-center p{font-size:12px;color:#c6d0e1}.player-controls{height:45px;color:#d8e0ed;display:flex;align-items:center;gap:14px;padding:0 15px;font-size:12px}.player-controls .spacer{flex:1}.timeline{height:3px;background:#39475c;position:relative}.timeline i{display:block;width:38%;height:3px;background:#7287ff}.source-note{background:#fff8e9;color:#9a6a20;border:1px solid #f6e8c7;border-radius:9px;padding:9px 12px;font-size:11px;margin-top:10px}
+.panel{background:#fff;border:1px solid var(--line);border-radius:15px;box-shadow:var(--shadow);overflow:hidden}.tabs{display:flex;border-bottom:1px solid var(--line);padding:0 14px;gap:18px}.tab{background:none;padding:14px 2px;color:#8490a2;font-size:13px;border-bottom:2px solid transparent}.tab.active{color:var(--blue);border-color:var(--blue);font-weight:800}.panelcontent{padding:18px 20px}.summary-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}.summary-top h3{margin:0;font-size:17px}.mode{font-size:12px;color:#748096;background:#f4f6fa;padding:5px 9px;border-radius:6px}.summary-intro{background:#f5f7ff;border:1px solid #e7eaff;border-radius:10px;padding:14px;color:#46536c;font-size:14px;line-height:1.8;margin-bottom:16px}.summary-intro strong{color:#283a75}.content-block{margin:18px 0}.content-block h4{font-size:14.5px;margin:0 0 8px}.content-block p,.content-block li{font-size:14px;color:#5b6880;line-height:1.85}.content-block ul{padding-left:20px;margin:6px 0}.code{background:#172033;color:#dce6f7;border-radius:9px;padding:13px;font:12.5px/1.75 ui-monospace,monospace;white-space:pre-wrap}.point{display:flex;gap:11px;margin:14px 0}.pointno{width:26px;height:26px;flex:none;border-radius:8px;background:#eef1ff;color:#536dfe;display:grid;place-items:center;font-size:13px;font-weight:800}.point b{font-size:14px}.point small{display:block;color:#68748a;font-size:13px;line-height:1.75;margin-top:4px}
+.chapter{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #f0f2f6;cursor:pointer}.chapter:last-child{border:0}.time{color:var(--blue);font:12px ui-monospace,monospace;background:#f1f3ff;padding:4px 7px;border-radius:5px}.chapter span:nth-child(2){font-size:14px;flex:1}.chapter small{color:#a0a8b5;font-size:11px}.transcript{font-size:14px;color:#5f6c84;line-height:2}.transcript .active-line{background:#eef1ff;color:#435be0;border-radius:5px;padding:5px 7px}.notearea{width:100%;min-height:135px;border:1px solid var(--line);border-radius:9px;padding:12px;outline:none;resize:vertical;font:13.5px/1.8 inherit}.savehint{font-size:10px;color:var(--green);margin-top:7px}
+.right-actions{display:flex;gap:8px;margin-top:12px}.right-actions .btn{flex:1}
+.leftcol .player{position:sticky;top:16px;z-index:10;box-shadow:0 14px 34px #101c3b26}
+.chiprow{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}.chiprow .chip{padding:6px 10px;font-size:12px}
+.tsec{border:1px solid var(--line);border-radius:11px;margin:11px 0;overflow:hidden;transition:.18s}
+.tsec-head{display:flex;align-items:center;gap:10px;padding:11px 13px;background:#f8f9fd;cursor:pointer}
+.tsec-head b{font-size:13.5px;flex:1}
+.tsec-head:hover{background:#eef1ff}
+.tsec-body{padding:2px 14px 10px}
+.tsec-body p{font-size:14px;color:#5f6c84;line-height:2;margin:9px 0}
+.tsec.active{border-color:#c9d2ff;box-shadow:0 0 0 3px #eef1ff}
+.tsec.active .tsec-head{background:#eef1ff}
+.tsec.active .tsec-head b{color:var(--blue)}
+.toast{position:fixed;bottom:25px;left:50%;transform:translateX(-50%);background:#172033;color:white;padding:10px 16px;border-radius:9px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:.2s;z-index:20}.toast.show{opacity:1}
+.modalback{display:none;position:fixed;inset:0;background:#17203366;z-index:15;align-items:center;justify-content:center;padding:20px}.modalback.show{display:flex}.modal{width:min(520px,100%);background:white;border-radius:17px;padding:22px;box-shadow:0 20px 70px #101a3344}.modal h2{margin:0 0 5px;font-size:19px}.modal p{color:var(--muted);font-size:12px}.modal input{width:100%;padding:12px;border:1px solid var(--line);border-radius:9px;margin:8px 0 14px;outline:none}.modalfoot{display:flex;justify-content:flex-end;gap:8px}
+@media(max-width:1100px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.workspace{grid-template-columns:1fr}.player-screen{height:330px}.stats{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:720px){.sidebar{width:64px;padding:18px 8px}.brand{padding:0 7px 24px}.brand span:last-child,.navlabel,.nav .navtext,.profile>div:last-child{display:none}.nav{justify-content:center;padding:12px 5px}.profile{justify-content:center;padding:12px 0}.main{margin-left:64px;width:calc(100% - 64px);padding:20px 14px}.pagehead{align-items:flex-start;gap:10px;flex-direction:column}.grid{grid-template-columns:1fr}.continue{grid-template-columns:100px 1fr}.continue>.btn{grid-column:2}.thumb{height:85px}.toolbar{flex-wrap:wrap}.search{max-width:none;flex-basis:100%}.stats{gap:8px}.stat{padding:12px}.stat strong{font-size:21px}.player-screen{height:240px}.detail-title{font-size:16px}.topbar{margin-bottom:20px}}
+/* ===== 存储空间 ===== */
+.storage{display:grid;grid-template-columns:1.15fr .85fr;gap:16px;margin:4px 0 24px}
+.scard{background:#fff;border:1px solid var(--line);border-radius:15px;padding:17px 20px;box-shadow:var(--shadow);min-width:0}
+.scard .sectionline{margin:0 0 4px}
+.sfig{display:flex;align-items:baseline;gap:10px;margin:14px 0 10px}
+.sfig b{font-size:28px;letter-spacing:-.5px}
+.sfig .pct{margin-left:auto;font-size:12px;font-weight:700;color:var(--blue);background:var(--blue2);padding:4px 9px;border-radius:7px}
+.sbar{height:12px;border-radius:8px;background:#eef1f7;overflow:hidden;display:flex}
+.sbar i{display:block;height:100%}
+.sbar .s1{background:#536dfe}.sbar .s2{background:#8b9bff}.sbar .s3{background:#b9c3ff}.sbar .s4{background:#d8dffb}
+.slegend{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:13px;font-size:12px;color:#68748a}
+.slegend span{display:flex;align-items:center;gap:6px}
+.sdot{width:9px;height:9px;border-radius:3px;display:inline-block;flex:none}
+.slist{margin-top:4px}
+.srow{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #f1f3f7;font-size:12.5px}
+.srow:last-child{border:0}
+.srow b{flex:1;min-width:0;font-weight:600;color:#40506a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srow .smini{width:52px;height:5px;border-radius:4px;background:#eef1f7;overflow:hidden;flex:none}
+.srow .smini i{display:block;height:100%;background:#8b9bff}
+.srow .ssize{color:#68748a;font-variant-numeric:tabular-nums;width:62px;text-align:right;flex:none}
+/* ===== 后台任务 ===== */
+.taskpanel{background:#fff;border:1px solid #e4e8ff;border-radius:15px;padding:15px 18px;box-shadow:var(--shadow);margin:0 0 24px}
+.taskpanel .thead{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.taskpanel h2{font-size:16px;margin:0}
+.task{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #f1f3f7}
+.task:last-child{border:0}
+.task .tinfo{flex:1;min-width:0}
+.task .tname{font-size:13px;font-weight:600;color:#3c4a63;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.task .tstep{font-size:11px;color:var(--muted);margin-top:3px}
+.task .tbar{width:150px;height:6px;border-radius:4px;background:#eef1f7;overflow:hidden;flex:none}
+.task .tbar i{display:block;height:100%;background:var(--blue);width:0;transition:width .45s}
+.task.done .tbar i{background:var(--green)}
+.task .tstate{font-size:11px;font-weight:700;color:var(--blue);width:50px;text-align:right;flex:none;font-variant-numeric:tabular-nums}
+.task.done .tstate{color:var(--green)}
+/* ===== 视频问答 ===== */
+.qa-list{display:flex;flex-direction:column;gap:12px;max-height:400px;overflow:auto;padding-right:4px;margin-bottom:12px}
+.qa{display:flex;gap:9px;align-items:flex-start}
+.qa .qa-av{width:28px;height:28px;border-radius:9px;flex:none;display:grid;place-items:center;font-size:12px;font-weight:800}
+.qa.bot .qa-av{background:#eef1ff;color:#536dfe}
+.qa.me{flex-direction:row-reverse}
+.qa.me .qa-av{background:#172033;color:#fff}
+.qa-bub{background:#f6f8fc;border:1px solid #eef1f7;border-radius:12px;padding:10px 13px;font-size:13.5px;line-height:1.8;color:#4a5770}
+.qa.me .qa-bub{background:var(--blue);border-color:var(--blue);color:#fff}
+.qa-bub b{color:#283a75}
+.qa.me .qa-bub b{color:#fff}
+.qa-bub code{background:#e8ecf6;color:#3b4a66;padding:1px 5px;border-radius:4px;font-size:12px}
+.qa-bub .cite{display:inline-flex;align-items:center;background:#eef1ff;color:#435be0;border:0;border-radius:6px;padding:2px 7px;font-size:11.5px;font-weight:700;margin:0 2px;cursor:pointer}
+.qa-sugs{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:11px}
+.qa-sugs .chip{padding:6px 10px;font-size:12px}
+.qa-input{display:flex;gap:8px}
+.qa-input input{flex:1;border:1px solid var(--line);border-radius:10px;padding:11px 12px;outline:none;font-size:13.5px;margin:0}
+.importarea{width:100%;min-height:108px;border:1px solid var(--line);border-radius:9px;padding:12px;margin:8px 0 10px;outline:none;resize:vertical;font:13px/1.7 inherit}
+.checkline{display:flex;align-items:center;gap:8px;font-size:12px;color:#5b6880;margin:6px 0 15px}
+.checkline input{margin:0;width:15px;height:15px}
+@media(max-width:1100px){.storage{grid-template-columns:1fr}}
+/* ===== 收藏夹 ===== */
+.favbtn{position:absolute;z-index:3;right:8px;top:8px;width:26px;height:26px;border-radius:8px;background:#ffffffeb;color:#94a0b4;font-size:14px;line-height:1;display:grid;place-items:center;padding:0;box-shadow:0 2px 8px #1a2a4e22}
+.favbtn:hover{color:#f0a34a}
+.favbtn.on{background:#fff3d9;color:#e8951f}
+.video-card.faved{outline:1px solid #ffe0a8}
+.nav .count{margin-left:auto;background:#eef1ff;color:#536dfe;border-radius:9px;padding:1px 7px;font-size:11px;font-weight:800}
+@media(max-width:720px){.nav .count{display:none}}
+#home.favmode .stats,#home.favmode .storage,#home.favmode .pagehead,#home.favmode .continue-line,#home.favmode .continue{display:none}
+#home.favmode #viewline{margin-top:0}
+/* ===== 磁盘告警 ===== */
+.storage-warn{display:flex;align-items:center;gap:9px;background:#fff4e5;border:1px solid #f8dcb0;color:#a2620a;border-radius:9px;padding:9px 12px;font-size:12px;margin:0 0 12px}
+.storage-warn b{color:#8a4d00}
+.storage-warn .wbtn{margin-left:auto;background:#fff;border:1px solid #f0cfa0;color:#a2620a;border-radius:7px;padding:4px 8px;font-size:11px;white-space:nowrap}
+.storage-warn.danger{background:#ffecec;border-color:#f5c2c2;color:#b02828}
+.storage-warn.danger b{color:#8f1d1d}
+.storage-warn.danger .wbtn{border-color:#eebcbc;color:#b02828}
+.sbar i.warnseg{background:#f0a34a}
+.threshold{font-size:11px;color:#748096;background:#f4f6fa;border-radius:6px;padding:4px 8px;cursor:pointer;border:0}
+/* ===== 任务操作 ===== */
+.tbtns{display:flex;gap:6px;flex:none}
+.tbtn{border:1px solid var(--line);background:#fff;color:#5b6880;border-radius:7px;padding:4px 9px;font-size:11px}
+.tbtn:hover{background:#f4f6fb}
+.tbtn.warn{color:#b02828;border-color:#f1cccc;background:#fff6f6}
+.task.failed .tbar i{background:#e05c5c}
+.task.failed .tstate{color:#c33}
+.task.failed .tstep{color:#c33}
+.task.paused .tbar i{background:#c3cad8}
+.task.paused .tstate{color:#8a94a6}
+/* ===== 流式输出 ===== */
+.typing-cursor{display:inline-block;width:7px;height:14px;background:#536dfe;border-radius:1px;vertical-align:-2px;margin-left:2px;animation:blink .9s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+.qa-thinking{display:inline-flex;gap:4px;align-items:center;color:#8a94a6;font-size:13px}
+.qa-thinking i{width:5px;height:5px;border-radius:50%;background:#b6bfd0;animation:bounce 1s infinite}
+.qa-thinking i:nth-child(2){animation-delay:.15s}.qa-thinking i:nth-child(3){animation-delay:.3s}
+@keyframes bounce{0%,60%,100%{transform:translateY(0);opacity:.5}30%{transform:translateY(-3px);opacity:1}}
+/* ===== 卡片右下角删除 / 媒体失效重新导入 ===== */
+.video-card{position:relative}
+.card-del{position:absolute;z-index:4;right:10px;bottom:10px;width:26px;height:26px;border-radius:50%;background:#172033cc;color:#fff;font-size:15px;line-height:1;display:grid;place-items:center;opacity:0;transition:.15s;pointer-events:none}
+.video-card:hover .card-del{opacity:1;pointer-events:auto}
+.card-del:hover{background:#e5484d}
+.player-empty{height:365px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:#c6d0e1;background:radial-gradient(circle at 70% 30%,#4669a6,#172846 50%,#0d1728);font-size:13px;text-align:center;padding:20px;border-radius:15px}
+.player-empty .btn{color:#dfe7f7;background:#ffffff1a;border:1px solid #ffffff33}
+
+/* ===== 任务管理页 ===== */
+.tasks-page{display:none}
+.tasks-page.show{display:block}
+.stat.clickable{cursor:pointer;transition:.15s;position:relative}
+.stat.clickable:hover{border-color:#c7d0ff;box-shadow:0 10px 26px #536dfe22;transform:translateY(-1px)}
+.stat .goarrow{position:absolute;right:14px;top:14px;font-size:12px;color:var(--blue);font-weight:700;opacity:0;transition:.15s}
+.stat.clickable:hover .goarrow{opacity:1}
+.tstat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+.tstat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 18px;box-shadow:var(--shadow)}
+.tstat .label{color:var(--muted);font-size:12px}
+.tstat strong{display:block;font-size:23px;margin:4px 0 2px}
+.tstat em{font-style:normal;color:var(--muted);font-size:11px}
+.tstat.running strong{color:var(--blue)} .tstat.done strong{color:var(--green)} .tstat.failed strong{color:#e05c5c}
+.tasktable{background:#fff;border:1px solid var(--line);border-radius:15px;box-shadow:var(--shadow);overflow:hidden}
+.tasktable .tthead{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid #f1f3f7;flex-wrap:wrap}
+.tasktable .tthead h2{font-size:16px;margin:0}
+.tasktable .tfilters{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.task-row{display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid #f1f3f7}
+.task-row:last-child{border-bottom:0}
+.task-row .ttype{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-size:16px;flex:none;background:#eef1ff;color:#536dfe}
+.task-row .ttype.asr{background:#e6f7f6;color:#0f766e}
+.task-row .ttype.ai{background:#f3ecff;color:#7c3aed}
+.task-row .ttype.calib{background:#fff3d9;color:#e8951f}
+.task-row .ttype.ok{background:#e8f7ee;color:#15803d}
+.task-row .ttype.bad{background:#ffecec;color:#c33}
+.task-row .rmain{flex:1;min-width:0}
+.task-row .rname{font-size:13.5px;font-weight:600;color:#2f3b52;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.task-row .rmeta{font-size:11.5px;color:var(--muted);margin-top:4px;display:flex;gap:10px;flex-wrap:wrap}
+.task-row .rprog{width:190px;flex:none}
+.task-row .rbar{height:6px;border-radius:4px;background:#eef1f7;overflow:hidden}
+.task-row .rbar i{display:block;height:100%;background:var(--blue);width:0;transition:width .45s}
+.task-row.done .rbar i{background:var(--green)}
+.task-row.failed .rbar i{background:#e05c5c}
+.task-row.paused .rbar i{background:#c3cad8}
+.task-row .rpct{font-size:11px;color:var(--muted);margin-top:4px;text-align:right;font-variant-numeric:tabular-nums}
+.task-row .rstate{width:74px;text-align:right;flex:none;font-size:11.5px;font-weight:700;color:var(--blue)}
+.task-row.done .rstate{color:var(--green)} .task-row.failed .rstate{color:#c33} .task-row.paused .rstate{color:#8a94a6}
+.task-row .tbtns{flex:none}
+.task-empty{padding:64px 20px;text-align:center;color:var(--muted);font-size:13px}
+@media(max-width:900px){.tstat-row{grid-template-columns:repeat(2,1fr)}.task-row{flex-wrap:wrap}.task-row .rprog{width:100%}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="sidebar">
+ <div class="brand"><div class="logo">V</div><span>VidLearn AI</span></div>
+ <div class="navlabel">工作空间</div>
+ <a class="nav active" id="nav-home" onclick="showHome()"><span class="ico">▦</span><span class="navtext">视频首页</span></a>
+ <a class="nav" id="nav-fav" onclick="showFavorites()"><span class="ico">★</span><span class="navtext">我的收藏</span><span class="count" id="favcount">2</span></a>
+ <a class="nav" onclick="toast('知识库将在后续版本开放')"><span class="ico">▤</span><span class="navtext">我的知识库</span></a>
+ <a class="nav" onclick="toast('学习记录将在后续版本开放')"><span class="ico">◷</span><span class="navtext">学习记录</span></a>
+ <a class="nav" id="nav-tasks" onclick="showTasks()"><span class="ico">⇅</span><span class="navtext">任务管理</span><span class="count" id="taskcount">0</span></a>
+ <div class="navlabel">管理</div>
+ <a class="nav" onclick="toast('分类管理原型入口')"><span class="ico">▦</span><span class="navtext">分类管理</span></a>
+ <a class="nav" onclick="toast('设置原型入口')"><span class="ico">⚙</span><span class="navtext">设置</span></a>
+ <div class="side-bottom"><div class="profile"><div class="avatar">Y</div><div><b style="font-size:12px">我的学习空间</b><small>本地知识库 · 私有部署</small></div></div></div>
+</aside>
+<main class="main">
+ <div class="topbar"><div class="crumb">工作空间　/　<span id="crumb-current">视频首页</span></div><div class="top-actions"><button class="iconbtn" onclick="toast('通知中心暂无新消息')">♧</button><button class="btn primary" onclick="openImport()">＋ 批量导入</button></div></div>
+ <section class="home" id="home">
+  <div class="pagehead"><div><div class="eyebrow">YOUR PERSONAL VIDEO LIBRARY</div><h1>把看过的视频，变成自己的知识</h1><p class="sub">集中管理视频内容，用 AI 总结、章节字幕、视频问答和笔记构建可搜索的知识库。</p></div><button class="btn" onclick="toast('已切换为最近学习排序')">最近学习　⌄</button></div>
+  <div class="stats">
+   <div class="stat"><div class="label">已收录视频</div><strong>128</strong><em>↑ 本周新增 12 个</em></div>
+   <div class="stat"><div class="label">累计学习时长</div><strong>36.5h</strong><em>↑ 较上周 +4.2h</em></div>
+   <div class="stat"><div class="label">AI 知识总结</div><strong>96</strong><em>已生成并可检索</em></div>
+   <div class="stat clickable" id="taskstatcard" onclick="showTasks()"><span class="goarrow">任务管理 →</span><div class="label">待处理任务</div><strong id="taskstat">3</strong><em id="taskstat-sub" style="color:var(--orange)">2 个处理中</em></div>
+  </div>
+    <div class="storage">
+   <div class="scard">
+    <div class="sectionline"><h2>磁盘容量</h2><span class="muted">本地磁盘 · /data/vidlearn <button class="threshold" id="thbtn" onclick="cycleThreshold()">告警阈值 85%</button></span></div>
+    <div class="storage-warn" id="storagewarn"><span>⚠</span><div><b>磁盘使用率 <span id="warnpct">86.4%</span></b>，已超过告警阈值 <span id="warnth">85%</span>，建议清理旧视频或扩容。</div><button class="wbtn" onclick="toast('已进入清理向导（演示）')">立即清理</button></div>
+    <div class="sfig"><b>86.4 GB</b><span class="muted">已用 / 共 100 GB</span><span class="pct" id="spct">86.4% 已用</span></div>
+    <div class="sbar"><i class="s1" style="width:78.2%"></i><i class="s2" style="width:3.1%"></i><i class="s3" style="width:2.4%"></i><i class="s4" style="width:2.7%"></i></div>
+    <div class="slegend">
+     <span><i class="sdot" style="background:#536dfe"></i>视频文件 78.2 GB</span>
+     <span><i class="sdot" style="background:#8b9bff"></i>字幕与转写 3.1 GB</span>
+     <span><i class="sdot" style="background:#b9c3ff"></i>AI 总结与索引 2.4 GB</span>
+     <span><i class="sdot" style="background:#d8dffb"></i>缩略图与其他 2.7 GB</span>
+    </div>
+    <div class="meta" style="margin-top:13px">剩余可用 <span id="sfree">13.6 GB</span>　·　建议保留 20% 以上余量，空间不足时新导入任务会被暂停</div>
+   </div>
+   <div class="scard">
+    <div class="sectionline"><h2>占用空间最多的视频</h2><span class="muted">Top 5</span></div>
+    <div class="slist">
+     <div class="srow"><b>Kafka 核心原理：消息存储、消费组与分区</b><div class="smini"><i style="width:100%"></i></div><span class="ssize">1.42 GB</span></div>
+     <div class="srow"><b>Docker Compose 实战：部署一套完整服务</b><div class="smini"><i style="width:79%"></i></div><span class="ssize">1.12 GB</span></div>
+     <div class="srow"><b>MySQL 慢查询分析：从 EXPLAIN 到索引优化</b><div class="smini"><i style="width:68%"></i></div><span class="ssize">986 MB</span></div>
+     <div class="srow"><b>从零开始理解 Redis 持久化机制：RDB 与 AOF</b><div class="smini"><i style="width:42%"></i></div><span class="ssize">612 MB</span></div>
+     <div class="srow"><b>3 分钟讲清楚 RAG 的工作原理和核心流程</b><div class="smini"><i style="width:13%"></i></div><span class="ssize">186 MB</span></div>
+    </div>
+   </div>
+  </div>
+  <div class="sectionline continue-line"><h2>继续学习</h2><span class="muted">接着上次的进度</span></div>
+  <div class="continue">
+   <div class="thumb"><span class="play">▶</span><span style="z-index:1;font-size:11px">SYSTEM DESIGN</span></div>
+   <div><div class="meta">B站 · 后端架构 · 上次学习 昨天 21:36</div><h3>从零开始理解 Redis 持久化机制：RDB 与 AOF</h3><div class="progress"><i style="width:62%"></i></div><div class="meta">已学习 18:42 / 30:15　·　完成度 62%</div></div>
+   <button class="btn primary" onclick="openDetail(0)">继续学习 →</button>
+  </div>
+  <div class="sectionline" id="viewline"><h2 id="viewtitle">我的视频</h2><span class="muted" id="countlabel">共 128 个视频</span></div>
+  <div class="toolbar">
+   <div class="search"><span>⌕</span><input id="search" placeholder="搜索视频标题、知识点、标签..." oninput="filterCards()"></div>
+   <button class="chip selected" data-filter="all" onclick="setFilter('all',this)">全部</button>
+   <button class="chip" data-filter="B站" onclick="setFilter('B站',this)">B站</button>
+   <button class="chip" data-filter="抖音" onclick="setFilter('抖音',this)">抖音</button>
+   <button class="chip" onclick="toast('分类筛选：技术 / AI / 产品')">分类　⌄</button>
+   <button class="chip" onclick="toast('已切换为 AI 处理完成')">处理状态　⌄</button>
+  </div>
+  <div class="grid" id="videogrid">
+   <article class="video-card" data-platform="B站" data-search="redis 持久化 rdb aof 后端 架构"><div class="cover" style="background:linear-gradient(130deg,#23415e,#6c8da7)"><span class="platform">B站</span><span class="covertext">REDIS<br>持久化机制</span><span class="duration">30:15</span><button class="favbtn" title="收藏" onclick="event.stopPropagation();toggleFav(this)">☆</button></div><div class="cardbody"><h3>从零开始理解 Redis 持久化机制：RDB 与 AOF</h3><div class="meta">技术 · 后端架构　·　昨天　·　612 MB</div><div class="tags"><span class="tag ai">AI 总结已完成</span><span class="tag">数据库</span></div></div></article>
+   <article class="video-card" data-platform="抖音" data-search="大模型 rag 检索增强生成 向量数据库"><div class="cover" style="background:linear-gradient(130deg,#392d66,#a47ec4)"><span class="platform">抖音</span><span class="covertext">RAG 检索增强生成<br>核心流程</span><span class="duration">03:48</span><button class="favbtn" title="收藏" onclick="event.stopPropagation();toggleFav(this)">☆</button></div><div class="cardbody"><h3>3 分钟讲清楚 RAG 的工作原理和核心流程</h3><div class="meta">AI 技术 · 大模型　·　今天　·　186 MB</div><div class="tags"><span class="tag ai">AI 总结已完成</span><span class="tag">RAG</span></div></div></article>
+   <article class="video-card" data-platform="B站" data-search="mysql explain sql 索引 优化 慢查询"><div class="cover" style="background:linear-gradient(130deg,#205d5a,#75aaa0)"><span class="platform">B站</span><span class="covertext">MYSQL<br>SQL 性能优化</span><span class="duration">46:22</span><button class="favbtn" title="收藏" onclick="event.stopPropagation();toggleFav(this)">☆</button></div><div class="cardbody"><h3>MySQL 慢查询分析：从 EXPLAIN 到索引优化</h3><div class="meta">技术 · 数据库　·　2 天前　·　986 MB</div><div class="tags"><span class="tag ai">AI 总结已完成</span><span class="tag">SQL</span></div></div></article>
+   <article class="video-card" data-platform="B站" data-search="docker compose 容器 部署 实战"><div class="cover" style="background:linear-gradient(130deg,#254a81,#6e9cce)"><span class="platform">B站</span><span class="covertext">DOCKER<br>部署实战</span><span class="duration">52:10</span><button class="favbtn" title="收藏" onclick="event.stopPropagation();toggleFav(this)">☆</button></div><div class="cardbody"><h3>Docker Compose 实战：部署一套完整服务</h3><div class="meta">技术 · DevOps　·　3 天前　·　1.12 GB</div><div class="tags"><span class="tag">待生成总结</span><span class="tag">部署</span></div></div></article>
+   <article class="video-card" data-platform="抖音" data-search="程序员 工作流 ai 编程 效率"><div class="cover" style="background:linear-gradient(130deg,#7c3d4f,#ce8d8a)"><span class="platform">抖音</span><span class="covertext">AI CODING<br>工作流</span><span class="duration">02:16</span><button class="favbtn" title="收藏" onclick="event.stopPropagation();toggleFav(this)">☆</button></div><div class="cardbody"><h3>程序员如何用 AI 重构日常开发工作流</h3><div class="meta">效率 · AI 工具　·　4 天前　·　96 MB</div><div class="tags"><span class="tag ai">AI 总结已完成</span><span class="tag">效率</span></div></div></article>
+   <article class="video-card" data-platform="B站" data-search="微服务 消息队列 kafka 原理"><div class="cover" style="background:linear-gradient(130deg,#755a29,#c7a45e)"><span class="platform">B站</span><span class="covertext">KAFKA<br>消息队列原理</span><span class="duration">1:12:08</span><button class="favbtn" title="收藏" onclick="event.stopPropagation();toggleFav(this)">☆</button></div><div class="cardbody"><h3>Kafka 核心原理：消息存储、消费组与分区</h3><div class="meta">技术 · 分布式系统　·　5 天前　·　1.42 GB</div><div class="tags"><span class="tag ai">AI 总结已完成</span><span class="tag">中间件</span></div></div></article>
+  </div><div class="empty" id="empty">没有找到匹配的视频，试试其他关键词。</div>
+ </section>
+  <section class="tasks-page" id="tasks">
+   <div class="pagehead"><div><div class="eyebrow">TASK CENTER</div><h1>任务管理</h1><p class="sub">集中查看导入、转写、AI 处理、字幕校准等后台任务，可随时暂停、重试或取消。</p></div><div class="top-actions"><button class="btn" onclick="batchPauseAll()">全部暂停</button><button class="btn" onclick="clearDoneTasks()">清除已完成</button></div></div>
+   <div class="tstat-row">
+    <div class="tstat running"><div class="label">进行中</div><strong id="ts-running">0</strong><em>正在处理</em></div>
+    <div class="tstat"><div class="label">排队等待</div><strong id="ts-queued">0</strong><em>等待开始</em></div>
+    <div class="tstat done"><div class="label">已完成</div><strong id="ts-done">0</strong><em>可去视频库查看</em></div>
+    <div class="tstat failed"><div class="label">失败 / 暂停</div><strong id="ts-failed">0</strong><em>需要处理</em></div>
+   </div>
+   <div class="tasktable">
+    <div class="tthead"><h2>全部任务</h2><div class="tfilters">
+     <button class="chip selected" data-tfilter="all" onclick="setTaskFilter('all',this)">全部</button>
+     <button class="chip" data-tfilter="active" onclick="setTaskFilter('active',this)">进行中</button>
+     <button class="chip" data-tfilter="done" onclick="setTaskFilter('done',this)">已完成</button>
+     <button class="chip" data-tfilter="failed" onclick="setTaskFilter('failed',this)">失败</button>
+    </div></div>
+    <div id="tasklistFull"></div>
+   </div>
+  </section>
+ <section class="detail" id="detail">
+  <div class="detail-head"><button class="back" onclick="goBack()">← 返回视频库</button><span style="color:#c4cad5">/</span><span class="detail-title" id="detailtitle">从零开始理解 Redis 持久化机制：RDB 与 AOF</span><span class="detail-meta">B站 · 30:15</span></div>
+  <div class="workspace">
+   <div class="leftcol">
+    <div class="player"><div class="player-screen"><div class="player-center"><div class="bigplay">▶</div><b>原平台播放器区域</b><p>此处在真实产品中加载 Bilibili / 抖音官方嵌入播放器</p></div></div><div class="timeline"><i></i></div><div class="player-controls"><span>▶</span><span>18:42 / 30:15</span><span>◖</span><span>⚙</span><span class="spacer"></span><span>⛶</span></div></div>
+    <div class="player-empty" id="playerEmpty" style="display:none"><div>本地媒体文件已失效，无法播放</div><button class="btn" onclick="reimportDemo()">重新导入</button></div>
+    <div class="source-note">ⓘ 原型演示：播放器为占位区域。正式接入时优先使用平台允许的嵌入方式；不可嵌入则显示原平台跳转入口。<button class="chip" style="margin-left:8px" onclick="toggleMediaInvalid()">模拟媒体失效</button></div>
+    <div class="sectionline"><h2>学习信息</h2><span class="muted">自动保存学习进度</span></div>
+    <div class="panel"><div class="panelcontent"><div class="meta">分类：后端架构　　标签：Redis、数据库、持久化　　文件大小：612 MB　　分辨率：1080P　　时长：30:15</div><div class="right-actions"><button class="btn soft" id="detfav" onclick="toggleDetailFav()">☆ 收藏</button><button class="btn" onclick="toast('原平台链接已复制（演示）')">↗ 原平台打开</button><button class="btn" onclick="toast('分享链接已复制（演示）')">分享</button></div></div></div>
+   </div>
+   <div class="rightcol">
+    <div class="panel">
+     <div class="tabs"><button class="tab active" data-tab="summary" onclick="switchTab('summary',this)">AI 总结</button><button class="tab" data-tab="transcript" onclick="switchTab('transcript',this)">章节与字幕</button><button class="tab" data-tab="qa" onclick="switchTab('qa',this)">AI 问答</button><button class="tab" data-tab="notes" onclick="switchTab('notes',this)">笔记</button></div>
+     <div class="panelcontent" id="tab-summary">
+      <div class="summary-top"><h3>核心内容总结</h3><span class="mode">深度学习版</span></div>
+      <div class="summary-intro"><strong>一句话概括</strong><br>Redis 通过 RDB 快照和 AOF 命令追加两种机制实现数据持久化，分别在恢复速度、数据完整性和存储成本之间做权衡。</div>
+      <div class="content-block"><h4>一、问题背景</h4><p>Redis 主要基于内存提供高性能读写能力，但进程退出或机器故障会导致内存数据丢失。持久化机制用于将数据保存到磁盘，并在重启时恢复。</p></div>
+      <div class="content-block"><h4>二、核心原理</h4><div class="point"><span class="pointno">1</span><div><b>RDB：定时生成数据快照</b><small>在指定时机将内存中的数据集写入 RDB 文件。恢复速度快，文件紧凑，但两次快照之间可能丢失数据。</small></div></div><div class="point"><span class="pointno">2</span><div><b>AOF：记录写命令</b><small>将写操作追加到日志文件，重启时重放命令。数据丢失窗口更小，但文件可能更大，恢复耗时更长。</small></div></div><div class="point"><span class="pointno">3</span><div><b>混合持久化</b><small>结合 RDB 格式与 AOF 增量数据，兼顾加载速度与数据完整性，具体行为取决于 Redis 版本和配置。</small></div></div></div>
+      <div class="content-block"><h4>三、关键配置示例</h4><div class="code"># AOF 持久化开关<br>appendonly yes<br><br># 同步策略：每秒同步一次<br>appendfsync everysec<br><br># RDB 快照规则示例<br>save 900 1<br>save 300 10<br>save 60 10000</div></div>
+      <div class="content-block"><h4>四、实践建议与注意事项</h4><ul><li>缓存型 Redis 与承载关键数据的 Redis，持久化策略不能一概而论。</li><li>关注磁盘空间、重写期间资源消耗、备份恢复演练。</li><li>不要只配置持久化而不验证恢复流程。</li></ul></div>
+      <div class="content-block"><h4>五、建议继续学习</h4><p>建议进一步了解 fork、写时复制（COW）、AOF rewrite、fsync 策略，以及主从复制与持久化的边界。</p></div>
+      <div class="right-actions"><button class="btn soft" onclick="toast('已复制总结（演示）')">复制总结</button><button class="btn" onclick="toast('已导出 Markdown（演示）')">导出 Markdown</button></div>
+     </div>
+     <div class="panelcontent" id="tab-transcript" style="display:none">
+      <div class="summary-top"><h3>章节与字幕</h3><span class="mode">6 个章节 · 点击章节定位字幕</span></div>
+      <div class="chiprow">
+       <button class="chip" onclick="jumpChapter('tsec0','00:00')">00:00 背景</button>
+       <button class="chip" onclick="jumpChapter('tsec1','04:18')">04:18 RDB 快照</button>
+       <button class="chip" onclick="jumpChapter('tsec2','10:35')">10:35 fork 与 COW</button>
+       <button class="chip" onclick="jumpChapter('tsec3','16:20')">16:20 AOF 机制</button>
+       <button class="chip" onclick="jumpChapter('tsec4','23:06')">23:06 混合持久化</button>
+       <button class="chip" onclick="jumpChapter('tsec5','28:40')">28:40 总结</button>
+      </div>
+      <div class="tsec" id="tsec0">
+       <div class="tsec-head" onclick="jumpChapter('tsec0','00:00')"><span class="time">00:00</span><b>为什么 Redis 需要持久化</b><small>背景</small></div>
+       <div class="tsec-body">
+        <p><span class="time">00:00</span> 今天我们来聊一下 Redis 的持久化。大家都知道 Redis 是一个以内存为主的数据库，那么如果服务突然宕机，数据应该怎么办？</p>
+        <p><span class="time">00:42</span> Redis 提供了两种主要的持久化方式，一种叫 RDB，另一种叫 AOF。我们先看 RDB。</p>
+       </div>
+      </div>
+      <div class="tsec active" id="tsec1">
+       <div class="tsec-head" onclick="jumpChapter('tsec1','04:18')"><span class="time">04:18</span><b>RDB 快照机制与触发条件</b><small>原理</small></div>
+       <div class="tsec-body">
+        <p><span class="time">04:18</span> RDB 本质上就是在某个时间点，对 Redis 当前的数据集做一次快照，然后把这个快照保存到磁盘文件中。</p>
+        <p><span class="time">05:06</span> 它的优点是文件比较紧凑，恢复速度也比较快，但是它不是实时的。</p>
+        <p><span class="time">06:30</span> 快照的触发时机由 save 规则决定，也可以手动执行 bgsave，后者会 fork 一个子进程来完成持久化。</p>
+       </div>
+      </div>
+      <div class="tsec" id="tsec2">
+       <div class="tsec-head" onclick="jumpChapter('tsec2','10:35')"><span class="time">10:35</span><b>fork、COW 与快照过程</b><small>实现</small></div>
+       <div class="tsec-body">
+        <p><span class="time">10:35</span> 这里要理解一个关键点，就是 fork 之后的写时复制机制，也就是 Copy On Write。</p>
+        <p><span class="time">12:48</span> 子进程只看到 fork 那一刻的数据视图，主进程继续处理写请求，修改发生在各自的副本上。</p>
+       </div>
+      </div>
+      <div class="tsec" id="tsec3">
+       <div class="tsec-head" onclick="jumpChapter('tsec3','16:20')"><span class="time">16:20</span><b>AOF 工作机制与 fsync 策略</b><small>原理</small></div>
+       <div class="tsec-body">
+        <p><span class="time">16:20</span> AOF 以追加的方式记录每一条写命令，重启时通过重放命令来恢复数据。</p>
+        <p><span class="time">18:05</span> appendfsync 有三种策略：always、everysec 和 no，分别对应不同的安全性与性能权衡。</p>
+        <p><span class="time">19:40</span> 文件越来越大怎么办？这就需要 AOF rewrite，用当前数据状态生成一份精简日志。</p>
+       </div>
+      </div>
+      <div class="tsec" id="tsec4">
+       <div class="tsec-head" onclick="jumpChapter('tsec4','23:06')"><span class="time">23:06</span><b>混合持久化与配置建议</b><small>实践</small></div>
+       <div class="tsec-body">
+        <p><span class="time">23:06</span> Redis 4.0 之后支持混合持久化：rewrite 时先写入 RDB 格式的全量数据，再追加 AOF 增量。</p>
+        <p><span class="time">25:12</span> 生产配置建议结合业务对数据丢失的容忍度来选择，不要照搬模板。</p>
+       </div>
+      </div>
+      <div class="tsec" id="tsec5">
+       <div class="tsec-head" onclick="jumpChapter('tsec5','28:40')"><span class="time">28:40</span><b>总结与常见问题</b><small>总结</small></div>
+       <div class="tsec-body">
+        <p><span class="time">28:40</span> 回顾一下：RDB 胜在恢复速度和文件紧凑，AOF 胜在数据完整性，混合持久化兼顾两者。</p>
+        <p><span class="time">29:50</span> 常见问题包括 fork 阻塞、磁盘打满、恢复演练缺失，这些在下一期视频展开。</p>
+       </div>
+      </div>
+      <p class="muted">章节与字幕逐段对齐：点击章节标题或上方快捷入口，播放器定位到对应进度并高亮该段字幕。正式版仅展示已验证的时间戳；双语字幕属于后续增强能力。</p>
+     </div>
+     <div class="panelcontent" id="tab-qa" style="display:none">
+      <div class="summary-top"><h3>视频问答</h3><span class="mode">基于本视频内容回答 · 会标注时间点</span></div>
+      <div class="qa-list" id="qalist">
+       <div class="qa bot"><div class="qa-av">AI</div><div class="qa-bub">你好，我已经看完了这段视频。可以问我里面的概念、配置细节，或者让我对比 RDB 与 AOF —— 回答会附上对应的时间点，点一下就能跳到原片。</div></div>
+      </div>
+      <div class="qa-sugs">
+       <button class="chip" onclick="askQuick('RDB 和 AOF 应该怎么选？')">RDB 和 AOF 怎么选？</button>
+       <button class="chip" onclick="askQuick('混合持久化是什么？')">混合持久化是什么？</button>
+       <button class="chip" onclick="askQuick('fork 为什么会阻塞？')">fork 为什么会阻塞？</button>
+       <button class="chip" onclick="askQuick('一般推荐怎么配置？')">一般推荐怎么配置？</button>
+      </div>
+      <div class="qa-input"><input id="qainput" placeholder="输入你的问题，回车发送…" onkeydown="if(event.key==='Enter')askSend()"><button class="btn primary" onclick="askSend()">发送</button></div>
+      <p class="muted" style="margin:10px 0 0">原型演示：回答为预置示例，正式版由大模型基于字幕与总结检索生成。</p>
+     </div>
+     <div class="panelcontent" id="tab-notes" style="display:none"><div class="summary-top"><h3>我的学习笔记</h3><span class="mode">自动保存演示</span></div><textarea class="notearea" id="notes" placeholder="记录你的理解、疑问、命令或代码片段……">RDB：快照，恢复快，可能丢失最近一次快照后的数据。
+AOF：记录写命令，数据完整性更好，恢复可能更慢。
+需要结合业务 RPO / RTO、磁盘和恢复演练选择策略。</textarea><div class="savehint" id="savehint">● 已保存到本地（原型状态）</div><div class="right-actions"><button class="btn primary" onclick="saveNote()">保存笔记</button><button class="btn" onclick="toast('已创建知识卡片（演示）')">转为知识卡片</button></div></div>
+    </div>
+    <div class="right-actions"><button class="btn" onclick="toast('已重新生成任务（演示）')">↻ 重新生成总结</button><button class="btn" onclick="toast('已加入待复习列表')">＋ 加入复习</button></div>
+   </div>
+  </div>
+ </section>
+</main>
+</div>
+<div class="modalback" id="importmodal" onclick="if(event.target===this)closeImport()"><div class="modal"><h2>批量导入视频</h2><p>粘贴 Bilibili / 抖音链接，<b>每行一个</b>。提交后在后台排队处理，可以离开当前页面。</p><textarea id="videourl" class="importarea" placeholder="https://www.bilibili.com/video/BV1xx411c7mD&#10;https://www.bilibili.com/video/BV1yy411c7mE&#10;https://v.douyin.com/xxxxxx/"></textarea><div class="meta" style="margin:0">支持平台：B站 / 抖音　·　单次最多 20 条　·　仅处理你有权访问的内容</div><label class="checkline"><input type="checkbox" id="importbg" checked> 导入后在后台自动解析、转写并生成 AI 总结</label><div class="modalfoot"><button class="btn" onclick="closeImport()">取消</button><button class="btn primary" onclick="submitImport()">开始批量导入</button></div></div></div>
+<div class="toast" id="toast"></div>
+<script>
+let currentFilter='all';
+function toast(msg){let t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)}
+function setNav(id){document.querySelectorAll('.nav').forEach(n=>n.classList.remove('active'));var el=document.getElementById(id);if(el)el.classList.add('active')}
+var detailHistoryPushed=false;
+function applyHome(){view='all';document.getElementById('home').classList.remove('hide');document.getElementById('home').classList.remove('favmode');document.getElementById('detail').classList.remove('show');hideTasksView();document.getElementById('crumb-current').textContent='视频首页';setNav('nav-home');document.getElementById('viewtitle').textContent='我的视频';applyView();window.scrollTo(0,0)}
+function safeReplaceHome(){try{if(!history.state||history.state.v!=='home')history.replaceState({v:'home'},'')}catch(e){}}
+function showHome(){applyHome();safeReplaceHome()}
+function showFavorites(){view='fav';currentFilter='all';document.querySelectorAll('.chip[data-filter]').forEach(x=>x.classList.toggle('selected',x.dataset.filter==='all'));document.getElementById('home').classList.remove('hide');document.getElementById('home').classList.add('favmode');document.getElementById('detail').classList.remove('show');hideTasksView();document.getElementById('crumb-current').textContent='我的收藏';setNav('nav-fav');document.getElementById('viewtitle').textContent='我的收藏';applyView();window.scrollTo(0,0);safeReplaceHome()}
+function hideTasksView(){var t=document.getElementById('tasks');if(t)t.classList.remove('show')}
+function showTasks(){document.getElementById('home').classList.add('hide');document.getElementById('detail').classList.remove('show');var t=document.getElementById('tasks');if(t)t.classList.add('show');document.getElementById('crumb-current').textContent='任务管理';setNav('nav-tasks');renderTasks();window.scrollTo(0,0);try{history.replaceState({v:'tasks'},'')}catch(e){}}
+function applyDetail(){document.getElementById('home').classList.add('hide');hideTasksView();document.getElementById('detail').classList.add('show');document.getElementById('crumb-current').textContent='学习工作台';setNav('nav-home');window.scrollTo(0,0)}
+function openDetail(i){applyDetail();try{history.pushState({v:'detail'},'');detailHistoryPushed=true}catch(e){detailHistoryPushed=false}}
+function goBack(){if(detailHistoryPushed){detailHistoryPushed=false;try{history.back();return}catch(e){}}applyHome()}
+window.addEventListener('popstate',function(e){detailHistoryPushed=false;if(e.state&&e.state.v==='detail')applyDetail();else applyHome()});
+try{history.replaceState({v:'home'},'')}catch(e){}
+/* ---- 收藏夹 ---- */
+let view='all';
+function toggleFav(btn){var card=btn.closest('.video-card');card.classList.toggle('faved');var on=card.classList.contains('faved');btn.classList.toggle('on',on);btn.textContent=on?'★':'☆';updateFavCount();if(on)toast('已加入收藏');if(view==='fav')applyView()}
+function updateFavCount(){var n=document.querySelectorAll('.video-card.faved').length;document.getElementById('favcount').textContent=n}
+function toggleDetailFav(){var b=document.getElementById('detfav');var on=b.dataset.on!=='1';b.dataset.on=on?'1':'0';b.textContent=on?'★ 已收藏':'☆ 收藏';var c=document.querySelector('.video-card[data-search*="redis 持久化"]');if(c){c.classList.toggle('faved',on);var fb=c.querySelector('.favbtn');if(fb){fb.classList.toggle('on',on);fb.textContent=on?'★':'☆'}}updateFavCount();if(view==='fav')applyView();toast(on?'已加入收藏':'已取消收藏')}
+function applyView(){document.getElementById('empty').textContent=(view==='fav')?'还没有收藏的视频，点卡片右上角的 ★ 即可收藏。':'没有找到匹配的视频，试试其他关键词。';filterCards()}
+document.querySelectorAll('.video-card').forEach((c,i)=>c.addEventListener('click',()=>openDetail(i)));
+document.querySelectorAll('.video-card').forEach(function(c){var b=document.createElement('button');b.className='card-del';b.title='删除视频';b.textContent='×';b.addEventListener('click',function(e){e.stopPropagation();var h=c.querySelector('h3');var t=h?h.textContent:'该视频';if(confirm('确定删除「'+t+'」？将同时删除本地媒体与知识资产。')){c.remove();filterCards();toast('已删除视频（原型演示）')}});c.appendChild(b)});
+function switchTab(name,btn){document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));btn.classList.add('active');['summary','transcript','qa','notes'].forEach(n=>document.getElementById('tab-'+n).style.display=n===name?'block':'none')}
+function jumpChapter(id,t){seek(t);var el=document.getElementById(id);var tb=document.querySelector('.tab[data-tab="transcript"]');if(el&&el.offsetParent===null&&tb){switchTab('transcript',tb)}document.querySelectorAll('.tsec').forEach(x=>x.classList.remove('active'));if(el){el.classList.add('active');setTimeout(function(){el.scrollIntoView({behavior:'smooth',block:'start'})},60)}}
+function seek(t){toast('定位到 '+t+'（播放器联动为原型演示）')}
+function toggleMediaInvalid(){var p=document.querySelector('#detail .player');var e=document.getElementById('playerEmpty');if(!p||!e)return;if(e.style.display==='none'||!e.style.display){p.style.display='none';e.style.display='flex'}else{p.style.display='';e.style.display='none'}}
+function reimportDemo(){var e=document.getElementById('playerEmpty');if(!e)return;e.innerHTML='<div>重新导入中…</div>';toast('已提交重新导入任务（演示）');setTimeout(function(){e.innerHTML='<div>本地媒体文件已失效，无法播放</div><button class="btn" onclick="reimportDemo()">重新导入</button>';toast('重新导入完成（演示），可正常播放')},1400)}
+function setFilter(f,btn){currentFilter=f;document.querySelectorAll('.chip[data-filter]').forEach(x=>x.classList.remove('selected'));btn.classList.add('selected');filterCards()}
+function filterCards(){let q=document.getElementById('search').value.toLowerCase(),cards=[...document.querySelectorAll('.video-card')],n=0,favN=0;cards.forEach(c=>{let favOk=(view!=='fav')||c.classList.contains('faved');if(c.classList.contains('faved'))favN++;let ok=favOk&&(currentFilter==='all'||c.dataset.platform===currentFilter)&&c.dataset.search.includes(q);c.style.display=ok?'':'none';if(ok)n++});document.getElementById('empty').style.display=n?'none':'block';document.getElementById('countlabel').textContent=(view==='fav')?('已收藏 '+favN+' 个视频'):('显示 '+n+' 个视频')}
+function openImport(){document.getElementById('importmodal').classList.add('show')}
+function closeImport(){document.getElementById('importmodal').classList.remove('show')}
+/* ================= 批量导入 · 后台任务 ================= */
+let tasks = [], taskTimer = null;
+const STEPS = ['排队等待', '解析视频信息', '下载与转码', '语音转写与字幕', '生成 AI 总结', '建立检索索引'];
+const TITLES = ['从零开始理解 Redis 持久化机制：RDB 与 AOF', '3 分钟讲清楚 RAG 的工作原理和核心流程', 'MySQL 慢查询分析：从 EXPLAIN 到索引优化', '程序员如何用 AI 重构日常开发工作流', 'Kafka 核心原理：消息存储、消费组与分区', 'Docker Compose 实战：部署一套完整服务'];
+const FAILS = ['网络中断（平台限流）', '转码失败：源文件损坏', '磁盘空间不足，任务已暂停'];
+var taskFilter = 'all';
+tasks = [
+ { id:'seed1', url:'https://www.bilibili.com/video/BV1xx411c7mD', title:TITLES[0], step:2, pct:46, status:'running', reason:'' },
+ { id:'seed2', url:'https://www.bilibili.com/video/BV1yy411c7mE', title:TITLES[1], step:3, pct:72, status:'running', reason:'' },
+ { id:'seed3', url:'https://www.bilibili.com/video/BV1zz411c7mF', title:TITLES[4], step:5, pct:100, status:'done', reason:'' },
+ { id:'seed4', url:'https://www.bilibili.com/video/BV1aa411c7mG', title:TITLES[2], step:1, pct:30, status:'failed', reason:'转码失败：源文件损坏' }
+];
+/* ---- 磁盘容量与阈值 ---- */
+var USED = 86.4, TOTAL = 100, threshold = 85;
+function updateStorage() {
+  var pct = USED / TOTAL * 100;
+  var over = pct >= threshold;
+  document.getElementById('spct').textContent = pct.toFixed(1) + '% 已用';
+  document.getElementById('sfree').textContent = (TOTAL - USED).toFixed(1) + ' GB';
+  document.getElementById('warnpct').textContent = pct.toFixed(1) + '%';
+  document.getElementById('warnth').textContent = threshold + '%';
+  document.getElementById('thbtn').textContent = '告警阈值 ' + threshold + '%';
+  var w = document.getElementById('storagewarn');
+  if (over) { w.style.display = 'flex'; w.classList.toggle('danger', pct >= threshold + 10); }
+  else { w.style.display = 'none'; }
+  document.querySelectorAll('.sbar i').forEach(i => i.classList.toggle('warnseg', over));
+}
+function cycleThreshold() { threshold = threshold >= 95 ? 80 : threshold + 5; updateStorage(); toast('告警阈值已调整为 ' + threshold + '%'); }
+function isDiskTight() { return USED / TOTAL * 100 >= threshold; }
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])) }
+function submitImport() {
+  const raw = document.getElementById('videourl').value.trim();
+  if (!raw) { toast('请先粘贴至少一个视频链接'); return }
+  const lines = raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean).slice(0, 20);
+  const bg = document.getElementById('importbg').checked;
+  closeImport();
+  document.getElementById('videourl').value = '';
+  lines.forEach((u, i) => tasks.push({ id: 't' + Date.now() + i, url: u, title: TITLES[tasks.length % TITLES.length], step: 0, pct: 0, status: 'queued', reason: '' }));
+  renderTasks();
+  if (isDiskTight()) toast('提醒：磁盘使用率 ' + (USED / TOTAL * 100).toFixed(1) + '% 已超过阈值 ' + threshold + '%，任务可能因空间不足失败');
+  else toast('已加入后台队列：' + lines.length + ' 个视频' + (bg ? '，正在后台处理' : '，等待手动开始'));
+  if (bg) startTasks();
+}
+function startTasks() { if (!taskTimer) taskTimer = setInterval(tickTasks, 700); }
+function tickTasks() {
+  tasks.forEach(t => {
+    if (t.status === 'done' || t.status === 'failed' || t.status === 'paused') return;
+    if (t.status === 'queued') t.status = 'running';
+    t.pct = Math.min(100, t.pct + Math.random() * 14 + 6);
+    if (t.pct < 100 && Math.random() < 0.05) {
+      t.status = 'failed';
+      t.reason = FAILS[Math.floor(Math.random() * FAILS.length)];
+      return;
+    }
+    if (t.pct >= 100) { t.pct = 100; t.status = 'done'; }
+    else t.step = Math.min(STEPS.length - 2, 1 + Math.floor(t.pct / 18));
+  });
+  renderTasks();
+  if (!tasks.some(t => t.status === 'running' || t.status === 'queued')) {
+    clearInterval(taskTimer); taskTimer = null;
+    if (tasks.length && tasks.every(t => t.status === 'done')) toast('后台任务全部完成，可在视频库刷新查看');
+  }
+}
+function renderTasks() {
+  renderTasksFull();
+  var unfinished = tasks.filter(t => t.status !== 'done').length;
+  var runN = tasks.filter(t => t.status === 'running').length;
+  var queueN = tasks.filter(t => t.status === 'queued').length;
+  var doneN = tasks.filter(t => t.status === 'done').length;
+  var failN = tasks.filter(t => t.status === 'failed' || t.status === 'paused').length;
+  var badge = document.getElementById('taskcount');
+  if (badge) { badge.textContent = unfinished; badge.style.display = unfinished ? '' : 'none'; }
+  var s = document.getElementById('taskstat'); if (s) s.textContent = unfinished || '0';
+  var sub = document.getElementById('taskstat-sub');
+  if (sub) sub.textContent = unfinished ? (runN + ' 个处理中') : '暂无排队';
+  var set = function (id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
+  set('ts-running', runN); set('ts-queued', queueN); set('ts-done', doneN); set('ts-failed', failN);
+}
+function taskStatusInfo(t) {
+  var done = t.status === 'done', failed = t.status === 'failed', paused = t.status === 'paused';
+  var label = done ? '已完成' : failed ? ('失败：' + t.reason) : paused ? '已暂停'
+    : (t.status === 'queued' ? '排队等待' : '当前步骤：' + STEPS[t.step]);
+  var state = done ? '完成' : failed ? '失败' : paused ? '暂停'
+    : (t.status === 'queued' ? '排队' : Math.round(t.pct) + '%');
+  var cls = (done ? 'done ' : '') + (failed ? 'failed ' : '') + (paused ? 'paused' : '');
+  return { done: done, failed: failed, paused: paused, label: label, state: state, cls: cls };
+}
+function taskButtons(t, info) {
+  if (info.done) return '<button class="tbtn" onclick="openDetailFromTask()">查看</button>';
+  var b = '';
+  if (info.failed) b = '<button class="tbtn warn" onclick="retryTask(\'' + t.id + '\')">重试</button>';
+  else if (t.status === 'queued') b = '<button class="tbtn" onclick="startTask(\'' + t.id + '\')">开始</button>';
+  else b = '<button class="tbtn" onclick="togglePause(\'' + t.id + '\')">' + (info.paused ? '继续' : '暂停') + '</button>';
+  b += '<button class="tbtn" onclick="cancelTask(\'' + t.id + '\')">取消</button>';
+  return b;
+}
+function renderTasksFull() {
+  var box = document.getElementById('tasklistFull'); if (!box) return;
+  var list = tasks.filter(function (t) {
+    if (taskFilter === 'active') return t.status === 'running' || t.status === 'queued';
+    if (taskFilter === 'done') return t.status === 'done';
+    if (taskFilter === 'failed') return t.status === 'failed' || t.status === 'paused';
+    return true;
+  });
+  if (!list.length) { box.innerHTML = '<div class="task-empty">当前没有任务。去「批量导入」新建任务吧。</div>'; return; }
+  box.innerHTML = list.map(function (t) {
+    var info = taskStatusInfo(t);
+    var type = info.done ? 'ok' : info.failed ? 'bad'
+      : (t.step >= 4 ? 'ai' : t.step === 3 ? 'asr' : '');
+    var icon = info.done ? '✓' : info.failed ? '!' : t.step >= 4 ? '✨' : t.step === 3 ? '✎' : '⬇';
+    return '<div class="task-row ' + info.cls + '">' +
+      '<div class="ttype ' + type + '">' + icon + '</div>' +
+      '<div class="rmain"><div class="rname">' + esc(t.title) + '</div>' +
+      '<div class="rmeta"><span>' + esc(t.url) + '</span><span>' + info.label + '</span></div></div>' +
+      '<div class="rprog"><div class="rbar"><i style="width:' + Math.round(t.pct) + '%"></i></div><div class="rpct">' + Math.round(t.pct) + '%</div></div>' +
+      '<div class="rstate">' + info.state + '</div>' +
+      '<div class="tbtns">' + taskButtons(t, info) + '</div></div>';
+  }).join('');
+}
+function setTaskFilter(f, btn) {
+  taskFilter = f;
+  document.querySelectorAll('.chip[data-tfilter]').forEach(function (x) { x.classList.remove('selected'); });
+  if (btn) btn.classList.add('selected');
+  renderTasksFull();
+}
+function cancelTask(id) {
+  tasks = tasks.filter(function (t) { return t.id !== id; });
+  renderTasks(); toast('已取消任务');
+}
+function batchPauseAll() {
+  tasks.forEach(function (t) { if (t.status === 'running') t.status = 'paused'; });
+  renderTasks(); toast('已暂停全部进行中任务');
+}
+function clearDoneTasks() {
+  tasks = tasks.filter(function (t) { return t.status !== 'done'; });
+  renderTasks(); toast('已清除已完成任务');
+}
+function openDetailFromTask() { showHome(); openDetail(0); }
+function startTask(id) {
+  const t = tasks.find(x => x.id === id); if (!t) return;
+  t.status = 'running'; renderTasks(); startTasks();
+}
+function togglePause(id) {  const t = tasks.find(x => x.id === id); if (!t) return;
+  if (t.status === 'paused') { t.status = 'running'; startTasks(); toast('任务已继续'); }
+  else { t.status = 'paused'; toast('任务已暂停'); }
+  renderTasks();
+}
+function retryTask(id) {
+  const t = tasks.find(x => x.id === id); if (!t) return;
+  t.status = 'queued'; t.pct = 0; t.step = 0; t.reason = '';
+  renderTasks(); startTasks(); toast('已重新加入队列');
+}
+/* ================= 视频问答 ================= */
+const QA_BANK = [
+  { k: ['rdb', 'aof', '选', '选择', '对比', '区别'], a: '简单说：<b>能容忍少量数据丢失、追求快速恢复</b>就选 RDB；<b>不能容忍丢数据</b>就用 AOF（通常 everysec 够用）；两者都要，就用混合持久化。混合模式在 <button class="cite" onclick="jumpChapter(\'tsec4\',\'23:06\')">23:06</button> 有讲。' },
+  { k: ['混合', 'hybrid', '4.0'], a: '混合持久化是在 rewrite 时先写入 RDB 全量数据、再追加 AOF 增量，兼顾加载速度与数据完整性。对应 <button class="cite" onclick="jumpChapter(\'tsec4\',\'23:06\')">23:06</button> 这一段。' },
+  { k: ['fork', '阻塞', 'cow', '写时复制', '快照过程'], a: 'fork 需要复制页表，内存越大耗时越长，期间主线程会被阻塞；COW 让父子进程共享物理页，只有写入时才复制。详见 <button class="cite" onclick="jumpChapter(\'tsec2\',\'10:35\')">10:35</button>。' },
+  { k: ['配置', '推荐', '参数', 'everysec', 'appendfsync', '怎么设'], a: '常见起点：<code>appendonly yes</code> + <code>appendfsync everysec</code>，同时保留 RDB 的 <code>save</code> 规则做兜底，并定期做恢复演练。见 <button class="cite" onclick="jumpChapter(\'tsec3\',\'16:20\')">16:20</button>。' },
+  { k: ['快照', 'save', 'bgsave', 'rdb'], a: 'RDB 是在某一时刻对数据集做快照：可手动 bgsave，或由 save 规则触发，子进程写完后替换旧文件。见 <button class="cite" onclick="jumpChapter(\'tsec1\',\'04:18\')">04:18</button>。' }
+];
+function appendQA(who, html) {
+  const list = document.getElementById('qalist');
+  const d = document.createElement('div');
+  d.className = 'qa ' + (who === 'me' ? 'me' : 'bot');
+  d.innerHTML = '<div class="qa-av">' + (who === 'me' ? '我' : 'AI') + '</div><div class="qa-bub">' + html + '</div>';
+  list.appendChild(d); list.scrollTop = list.scrollHeight;
+}
+let qaBusy = false;
+const FALLBACK = '这个问题我可以基于视频内容回答：这段视频主要讲 Redis 持久化，涵盖 RDB 快照、AOF 追加与混合持久化三条路径。你可以问得更具体一些，比如「AOF 的 fsync 策略怎么选」，或者点回答里的时间点直接定位原片。';
+function streamBot(html) {
+  const list = document.getElementById('qalist');
+  const wrap = document.createElement('div');
+  wrap.className = 'qa bot';
+  wrap.innerHTML = '<div class="qa-av">AI</div><div class="qa-bub"><span class="qa-thinking"><i></i><i></i><i></i></span></div>';
+  list.appendChild(wrap); list.scrollTop = list.scrollHeight;
+  const bub = wrap.querySelector('.qa-bub');
+  setTimeout(() => {
+    bub.innerHTML = '';
+    const tokens = html.match(/<[^>]+>|[\s\S]/g) || [];
+    const cur = document.createElement('span'); cur.className = 'typing-cursor'; bub.appendChild(cur);
+    let i = 0;
+    const timer = setInterval(() => {
+      if (i >= tokens.length) { clearInterval(timer); cur.remove(); qaBusy = false; return; }
+      cur.insertAdjacentHTML('beforebegin', tokens[i++]);
+      list.scrollTop = list.scrollHeight;
+    }, 16);
+  }, 400);
+}
+function answer(q) {
+  if (qaBusy) return;
+  qaBusy = true;
+  const s = q.toLowerCase();
+  const hit = QA_BANK.find(x => x.k.some(k => s.includes(k)));
+  streamBot(hit ? hit.a : FALLBACK);
+}
+function askSend() {
+  const el = document.getElementById('qainput');
+  const q = el.value.trim(); if (!q || qaBusy) return;
+  el.value = ''; appendQA('me', esc(q)); answer(q);
+}
+function askQuick(q) { if (qaBusy) return; appendQA('me', esc(q)); answer(q); }
+/* ---- 初始化 ---- */
+(function initUI() {
+  ['redis 持久化', 'mysql explain'].forEach(k => {
+    const c = document.querySelector('.video-card[data-search*="' + k + '"]');
+    if (!c) return;
+    c.classList.add('faved');
+    const b = c.querySelector('.favbtn');
+    if (b) { b.classList.add('on'); b.textContent = '★'; }
+  });
+  updateFavCount();
+  updateStorage();
+  renderTasks();
+  var rf = document.querySelector('.video-card[data-search*="redis 持久化"]');
+  var df = document.getElementById('detfav');
+  if (rf && df && rf.classList.contains('faved')) { df.dataset.on = '1'; df.textContent = '★ 已收藏'; }
+})();
+function saveNote(){document.getElementById('savehint').textContent='● 笔记已保存（原型演示）';toast('笔记已保存（模拟）')}
+</script>
+</body></html>
