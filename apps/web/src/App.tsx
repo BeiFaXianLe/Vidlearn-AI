@@ -492,6 +492,8 @@ function Detail({ id, onBack, show }: { id: string; onBack: () => void; show: (m
   const [glossTerms, setGlossTerms] = useState<any[]>([]);
   const [useLlm, setUseLlm] = useState(true);
   const [useAlign, setUseAlign] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [replaceOpen, setReplaceOpen] = useState(false);
 
   async function loadDetail() {
     try {
@@ -771,11 +773,19 @@ function Detail({ id, onBack, show }: { id: string; onBack: () => void; show: (m
   }
 
   // 生成章节 + 补标点 合为一步：若当前是未标点的 ASR 轨，先补标点再生成章节
+  // 判断字幕是否基本没有标点（用于生成章节前自动补标点）
+  function needsPunctuation(cues: Segment[]): boolean {
+    if (!cues.length) return false;
+    const punct = /[，。！？、；：,.!?;:]/;
+    const withP = cues.filter((c) => punct.test(c.text || "")).length;
+    return withP / cues.length < 0.3;
+  }
+
   async function generateChaptersAndPunct() {
     if (busy || punctBusy) return;
     try {
-      const src = qc?.source_type;
-      if (segments.length > 0 && src === "asr") {
+      // 只要当前字幕基本没标点，就先补标点，再生成章节（无论来源）
+      if (segments.length > 0 && needsPunctuation(segments)) {
         await runPunctuate();          // 内部会刷新 segments / qc
       }
       await analyze("chapters");
@@ -1075,38 +1085,31 @@ function Detail({ id, onBack, show }: { id: string; onBack: () => void; show: (m
                 <div>
                   <div className="summary-top">
                     <h3>章节与字幕</h3>
-                    <span className="mode">
-                      {chapters.length} 个章节 · {paragraphs.length} 段字幕
-                    </span>
+                    <div className="tsec-tools">
+                      <span className="mode">
+                        {chapters.length} 个章节 · {paragraphs.length} 段字幕
+                      </span>
+                      <div className="kebab-wrap">
+                        <button className="kebab" title="更多操作" onClick={() => setMenuOpen((v) => !v)}>⋮</button>
+                        {menuOpen && (
+                          <div className="kebab-menu" onMouseLeave={() => setMenuOpen(false)}>
+                            <button onClick={() => { setMenuOpen(false); runCalibrate(); }}>校准字幕</button>
+                            <button onClick={() => { setMenuOpen(false); openGlossary(); }}>术语表</button>
+                            <button onClick={() => { setMenuOpen(false); openReview(); }}>查看改动</button>
+                            <button onClick={() => { setMenuOpen(false); setReplaceOpen(true); }}>名词替换…</button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
                   {segments.length > 0 && (
                     <div className="calib-bar">
-                      {qc && qc.score != null && (
-                        <span
-                          className={"qc-badge " + (qc.score >= 85 ? "good" : qc.score >= 60 ? "mid" : "bad")}
-                          title="字幕质量分（0-100），越低越需要校准"
-                        >
-                          字幕质量 {qc.score}
-                          {qc.stats?.variant_hits ? ` · 疑似术语错 ${qc.stats.variant_hits}` : ""}
-                        </span>
-                      )}
-                      <label className="calib-opt">
-                        <input type="checkbox" checked={useLlm} onChange={(e) => setUseLlm(e.target.checked)} /> AI 纠错
-                      </label>
-                      <label className="calib-opt">
-                        <input type="checkbox" checked={useAlign} onChange={(e) => setUseAlign(e.target.checked)} /> 时间轴对齐
-                      </label>
-                      <button className="btn soft" disabled={calibBusy} onClick={() => runCalibrate()}>
-                        {calibBusy ? <span className="spin" /> : "校准字幕"}
-                      </button>
-                      <button className="btn soft" onClick={() => openGlossary()}>术语表</button>
-                      <button className="btn soft" onClick={() => openReview()}>查看改动</button>
                       <button className="btn soft" disabled={!!busy || punctBusy} onClick={() => generateChaptersAndPunct()}>
                         {busy === "chapters" || punctBusy ? <span className="spin" /> : "生成章节"}
                       </button>
-                      {calibBusy && <span className="meta">{calibStage}</span>}
                       {punctBusy && <span className="meta">{punctStage}</span>}
+                      {calibBusy && <span className="meta">{calibStage}</span>}
                       {busy === "chapters" && <span className="meta">生成章节中…</span>}
                     </div>
                   )}
@@ -1258,6 +1261,14 @@ function Detail({ id, onBack, show }: { id: string; onBack: () => void; show: (m
           captionId={qc?.caption_id}
           onRevert={revertCalibration}
           onClose={() => setReviewOpen(false)}
+        />
+      )}
+      {replaceOpen && (
+        <ReplaceModal
+          videoId={id}
+          onClose={() => setReplaceOpen(false)}
+          onDone={async () => { setReplaceOpen(false); await loadDetail(); await loadQC(); }}
+          show={show}
         />
       )}
       {glossOpen && (
@@ -1760,6 +1771,19 @@ function GlossaryManager({ videoId, terms, onExtract, onRefresh, onClose, show }
     }
   }
 
+  async function editTerm(t: any) {
+    const name = prompt("编辑术语（正确写法）", t.term);
+    if (!name || name === t.term) return;
+    try {
+      await fetch(`/api/glossary/${t.id}`, { method: "PATCH",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ term: name }) });
+      await onRefresh();
+      show("已更新术语");
+    } catch (e: any) {
+      show("更新失败: " + e.message);
+    }
+  }
+
   async function del(gid: string) {
     try {
       await fetch(`/api/glossary/${gid}`, { method: "DELETE" });
@@ -1791,6 +1815,7 @@ function GlossaryManager({ videoId, terms, onExtract, onRefresh, onClose, show }
               {(t.variants && JSON.parse(t.variants || "[]").length > 0) && (
                 <span className="muted">已知错写：{JSON.parse(t.variants).join("、")}</span>
               )}
+              <button className="tbtn" onClick={() => editTerm(t)}>编辑</button>
               <button className="tbtn" onClick={() => del(t.id)}>删除</button>
             </div>
           ))}
@@ -1942,6 +1967,53 @@ function TasksPage({ tasks, loadTasks, onOpenVideo, show }: {
             );
           })
         )}
+      </div>
+    </div>
+  );
+}
+
+function ReplaceModal({ videoId, onClose, onDone, show }: {
+  videoId: string;
+  onClose: () => void;
+  onDone: () => void | Promise<void>;
+  show: (m: string) => void;
+}) {
+  const [oldS, setOldS] = useState("");
+  const [newS, setNewS] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function apply() {
+    if (!oldS.trim()) return show("请输入要替换的旧写法");
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/videos/${videoId}/subtitle-replace`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ old: oldS.trim(), new: newS }),
+      }).then((x) => x.json());
+      if (r.ok === false) throw new Error(r.detail || "替换失败");
+      show(`已替换 ${r.replaced} 处`);
+      await onDone();
+    } catch (e: any) {
+      show("替换失败: " + e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modalback" onClick={(e) => e.target === e.currentTarget && !busy && onClose()}>
+      <div className="modal" style={{ width: "min(520px,96%)" }}>
+        <h2>名词替换（全局）</h2>
+        <p>把本视频当前主字幕里的旧写法，全部替换为正确写法。改动可在「查看改动」里追溯。</p>
+        <div className="gloss-add">
+          <input placeholder="旧写法，如：金州科技" value={oldS} onChange={(e) => setOldS(e.target.value)} />
+          <input placeholder="新写法，如：镜舟科技" value={newS} onChange={(e) => setNewS(e.target.value)} />
+        </div>
+        <div className="meta" style={{ marginTop: 8 }}>提示：仅作用于本视频当前主字幕；替换后如需回退，可在「查看改动」中核对。</div>
+        <div className="modalfoot" style={{ marginTop: 14 }}>
+          <button className="btn" disabled={busy} onClick={onClose}>取消</button>
+          <button className="btn primary" disabled={busy} onClick={apply}>{busy ? <span className="spin" /> : "应用替换"}</button>
+        </div>
       </div>
     </div>
   );

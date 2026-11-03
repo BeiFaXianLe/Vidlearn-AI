@@ -202,3 +202,17 @@ def test_delete_caption_reverts(client):
     # 回退后首选应回到原始轨（or 至少不是被删的轨）
     qc = client.get(f"/api/videos/{vid}/subtitle-qc").json()
     assert qc["caption_id"] != new_cid
+
+
+def test_subtitle_replace_endpoint(client):
+    vid, cid = _mk_video_with_caption(client, pid="rep1",
+                                      cues=[{"start_ms": 0, "end_ms": 3000, "text": "北京金州科技有限公司"},
+                                            {"start_ms": 3000, "end_ms": 6000, "text": "荆州科技出海"}])
+    r = client.post(f"/api/videos/{vid}/subtitle-replace", json={"old": "金州", "new": "镜舟"})
+    assert r.status_code == 200
+    assert r.json()["replaced"] >= 1
+    # 变更已写入
+    ch = client.get(f"/api/videos/{vid}/caption-changes", params={"caption_id": cid}).json()["changes"]
+    assert any("镜舟" in x["after"] for x in ch)
+    # 空旧写法拒绝
+    assert client.post(f"/api/videos/{vid}/subtitle-replace", json={"old": "  ", "new": "x"}).status_code == 400

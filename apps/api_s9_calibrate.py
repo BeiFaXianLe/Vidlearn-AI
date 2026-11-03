@@ -257,6 +257,50 @@ async def _run_calibrate(app, job_id: str, payload: dict) -> None:
         st.jobs.update(job_id, status="error", stage="失败", error={"message": str(e)[:300]})
 
 
+# ---------------- 手动名词替换（全局替换到本视频字幕） ----------------
+class ReplaceIn(BaseModel):
+    old: str
+    new: str
+    caption_id: str | None = None
+
+
+@router.post("/videos/{video_id}/subtitle-replace")
+def subtitle_replace(video_id: str, body: ReplaceIn, request: Request):
+    """把当前主字幕里出现的「old」全部替换为「new」（手动纠错），记录变更日志。"""
+    old = (body.old or "").strip()
+    new = (body.new or "").strip()
+    if not old:
+        raise HTTPException(status_code=400, detail="旧写法不能为空")
+    st = request.app.state
+    with st.db_lock:
+        from apps.core.intake import CaptionIntake
+        vrepo, crepo, srepo = _repos(st.db)
+        if not vrepo.get(video_id):
+            raise HTTPException(status_code=404, detail="视频不存在")
+        cap = None
+        if body.caption_id:
+            cap = next((t for t in crepo.for_video(video_id) if t["id"] == body.caption_id), None)
+        if not cap:
+            cap = CaptionIntake(vrepo, crepo, srepo).choose_primary(video_id)
+        if not cap:
+            raise HTTPException(status_code=400, detail="该视频还没有字幕")
+        segs = srepo.for_video(video_id, cap["id"])
+        changes = []
+        n = 0
+        for s in segs:
+            txt = s.get("text") or ""
+            if old in txt:
+                nt = txt.replace(old, new)
+                st.db.execute("UPDATE transcript_segments SET text=? WHERE id=?", (nt, s["id"]))
+                changes.append({"segment_index": s.get("segment_index"), "start_ms": s.get("start_ms"),
+                                "before": txt, "after": nt, "reason": "manual", "confidence": 1.0})
+                n += 1
+        st.db.commit()
+        if changes:
+            CaptionChangeRepo(st.db).add_many(video_id, cap["id"], changes)
+    return {"ok": True, "replaced": n, "segments": len(segs), "caption_id": cap["id"]}
+
+
 # ---------------- 变更复核 / 首选轨 / 回退 ----------------
 @router.get("/videos/{video_id}/caption-changes")
 def caption_changes(video_id: str, request: Request, caption_id: str | None = None):
