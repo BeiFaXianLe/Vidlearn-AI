@@ -778,6 +778,7 @@ function Detail({ id, onBack, show }: { id: string; onBack: () => void; show: (m
           show(`标点已补齐：${t.result?.changed}/${t.result?.total} 条`);
           const segs = await api.transcript(id);
           setSegments(segs);
+          try { const q = await fetch(`/api/videos/${id}/subtitle-qc`).then((x) => x.json()); setQc(q); } catch {}
           setPunctBusy(false);
           return;
         }
@@ -788,6 +789,20 @@ function Detail({ id, onBack, show }: { id: string; onBack: () => void; show: (m
     } catch (e: any) {
       show("标点恢复失败: " + e.message);
       setPunctBusy(false);
+    }
+  }
+
+  // 生成章节 + 补标点 合为一步：若当前是未标点的 ASR 轨，先补标点再生成章节
+  async function generateChaptersAndPunct() {
+    if (busy || punctBusy) return;
+    try {
+      const src = qc?.source_type;
+      if (segments.length > 0 && src === "asr") {
+        await runPunctuate();          // 内部会刷新 segments / qc
+      }
+      await analyze("chapters");
+    } catch (e: any) {
+      show("生成章节失败: " + e.message);
     }
   }
 
@@ -1109,11 +1124,12 @@ function Detail({ id, onBack, show }: { id: string; onBack: () => void; show: (m
                       </button>
                       <button className="btn soft" onClick={() => openGlossary()}>术语表</button>
                       <button className="btn soft" onClick={() => openReview()}>查看改动</button>
-                      <button className="btn soft" disabled={punctBusy} onClick={() => runPunctuate()}>
-                        {punctBusy ? <span className="spin" /> : "补标点"}
+                      <button className="btn soft" disabled={!!busy || punctBusy} onClick={() => generateChaptersAndPunct()}>
+                        {busy === "chapters" || punctBusy ? <span className="spin" /> : "生成章节"}
                       </button>
                       {calibBusy && <span className="meta">{calibStage}</span>}
                       {punctBusy && <span className="meta">{punctStage}</span>}
+                      {busy === "chapters" && <span className="meta">生成章节中…</span>}
                     </div>
                   )}
 
@@ -1129,14 +1145,6 @@ function Detail({ id, onBack, show }: { id: string; onBack: () => void; show: (m
                           {fmtTime(g.start_ms)} {g.title}
                         </button>
                       ))}
-                    </div>
-                  )}
-
-                  {chapters.length === 0 && (
-                    <div className="right-actions" style={{ marginTop: 0, marginBottom: 12 }}>
-                      <button className="btn soft" disabled={!!busy} onClick={() => analyze("chapters")}>
-                        {busy === "chapters" ? <span className="spin" /> : "生成章节"}
-                      </button>
                     </div>
                   )}
 
