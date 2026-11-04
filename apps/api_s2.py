@@ -107,7 +107,8 @@ async def verify_credential(body: VerifyIn, request: Request):
                                cookies_from_browser=st.settings.ytdlp_cookies_from_browser,
                                use_browser=st.settings.douyin_use_browser,
                                browser_path=st.settings.douyin_browser_path,
-                               profile_dir=str(_douyin_profile_dir(st)))
+                               profile_dir=str(_douyin_profile_dir(st)),
+                               cdp_port=st.settings.douyin_cdp_port)
             r = await ad.verify_login()
             return {"platform": "douyin", **r}
         return {"ok": False, "platform": body.platform, "message": "不支持的平台"}
@@ -125,7 +126,8 @@ async def probe(body: ProbeIn, request: Request):
                              cookies_from_browser=st.settings.ytdlp_cookies_from_browser,
                              douyin_use_browser=st.settings.douyin_use_browser,
                              douyin_browser_path=st.settings.douyin_browser_path,
-                             douyin_profile_dir=str(_douyin_profile_dir(st)))
+                             douyin_profile_dir=str(_douyin_profile_dir(st)),
+                             douyin_cdp_port=st.settings.douyin_cdp_port)
         meta = await ad.probe(body.source)
         return {"ok": True, "meta": meta.__dict__}
     except AcquireError as e:
@@ -142,7 +144,8 @@ async def import_media(body: ImportIn, request: Request):
                              cookies_from_browser=st.settings.ytdlp_cookies_from_browser,
                              douyin_use_browser=st.settings.douyin_use_browser,
                              douyin_browser_path=st.settings.douyin_browser_path,
-                             douyin_profile_dir=str(_douyin_profile_dir(st)))
+                             douyin_profile_dir=str(_douyin_profile_dir(st)),
+                             douyin_cdp_port=st.settings.douyin_cdp_port)
         mgr = AcquisitionManager(st.settings.media.temp, st.settings.media.original, st.settings.ffmpeg_path)
         res = await mgr.acquire(ad, body.source, max_height=body.max_height,
                                 download_sections=body.download_sections)
@@ -275,7 +278,8 @@ async def transcript_tracks(source: str, request: Request):
                              cookies_from_browser=st.settings.ytdlp_cookies_from_browser,
                              douyin_use_browser=st.settings.douyin_use_browser,
                              douyin_browser_path=st.settings.douyin_browser_path,
-                             douyin_profile_dir=str(_douyin_profile_dir(st)))
+                             douyin_profile_dir=str(_douyin_profile_dir(st)),
+                             douyin_cdp_port=st.settings.douyin_cdp_port)
     if not hasattr(ad, "fetch_subtitles"):
         raise HTTPException(status_code=400, detail="该来源不支持平台字幕")
     r = await ad.fetch_subtitles(source)

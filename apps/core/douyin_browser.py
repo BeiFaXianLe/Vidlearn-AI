@@ -82,28 +82,35 @@ def ensure_playwright_temp() -> str | None:
 
 
 def find_chrome() -> str | None:
-    """自动探测本机 Chrome/Edge 可执行文件。"""
+    """自动探测本机 Chrome/Edge 可执行文件。
+
+    优先 Chrome，其次 Edge；每个品牌都先把所有安装位置扫完再换品牌。
+    （用户级安装的 Chrome 在 LOCALAPPDATA 下，不能因为 Program Files 里有 Edge 就提前返回。）
+    """
     if os.environ.get("VIDLEARN_DOUYIN_BROWSER"):
         p = os.environ["VIDLEARN_DOUYIN_BROWSER"]
         return p if Path(p).exists() else None
-    cands = []
+
+    chrome: list[Path] = []
+    edge: list[Path] = []
     if sys.platform == "win32":
         for base in (os.environ.get("ProgramFiles", r"C:\Program Files"),
                      os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"),
                      os.environ.get("LOCALAPPDATA", "")):
             if not base:
                 continue
-            cands += [
-                Path(base) / "Google/Chrome/Application/chrome.exe",
-                Path(base) / "Microsoft/Edge/Application/msedge.exe",
-            ]
+            chrome.append(Path(base) / "Google/Chrome/Application/chrome.exe")
+            edge.append(Path(base) / "Microsoft/Edge/Application/msedge.exe")
     elif sys.platform == "darwin":
-        cands += [Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
-                  Path("/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge")]
+        chrome.append(Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"))
+        edge.append(Path("/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"))
+        chrome.append(Path.home() / "Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
     else:
-        cands += [Path("/usr/bin/google-chrome"), Path("/usr/bin/chromium"),
-                  Path("/usr/bin/chromium-browser"), Path("/usr/bin/microsoft-edge")]
-    for c in cands:
+        chrome += [Path("/usr/bin/google-chrome"), Path("/usr/bin/google-chrome-stable"),
+                   Path("/usr/bin/chromium"), Path("/usr/bin/chromium-browser")]
+        edge.append(Path("/usr/bin/microsoft-edge"))
+
+    for c in chrome + edge:
         if c.exists():
             return str(c)
     return None
@@ -133,10 +140,13 @@ def _pick_play_urls(video: dict) -> list[str]:
 
 
 async def resolve(url: str, *, browser_path: str | None = None,
-                  timeout_ms: int = 30000, profile_dir: str | None = None) -> dict:
+                  timeout_ms: int = 30000, profile_dir: str | None = None,
+                  cookies: dict[str, str] | None = None) -> dict:
     """返回 {id,title,author,duration_ms,cover,play_urls,raw_aweme_id}。
 
-    profile_dir 非空时使用持久化 profile（同一目录复用登录态，扫码登录一次长期有效）。
+    用干净的 headless context 解析（实测最稳）；cookies 非空时注入登录态
+    （来自 CredentialProvider，经 CDP 采集）。不用浏览器桥的窗口去解析——
+    桥的 profile 容易被抖音风控标记成验证中间页。
     """
     if not playwright_available():
         raise DouyinResolveError("internal", "未安装 playwright")
@@ -164,6 +174,15 @@ async def resolve(url: str, *, browser_path: str | None = None,
                 ctx = await browser.new_context(**ctx_options)
         except Exception as e:
             raise DouyinResolveError("internal", f"启动浏览器失败：{str(e)[:120]}")
+        # 注入已保存的抖音 Cookie（若有）
+        if cookies:
+            try:
+                await ctx.add_cookies([
+                    {"name": k, "value": v, "domain": ".douyin.com", "path": "/"}
+                    for k, v in cookies.items() if k and v
+                ])
+            except Exception:
+                pass
         page = await ctx.new_page() if not ctx.pages else ctx.pages[0]
 
         async def on_resp(resp):

@@ -182,7 +182,7 @@ def test_pick_play_urls_prefers_and_dedups():
 def test_adapter_uses_browser_channel(monkeypatch, tmp_path):
     import asyncio
 
-    async def fake_resolve(url, browser_path=None, timeout_ms=30000, profile_dir=None):
+    async def fake_resolve(url, browser_path=None, timeout_ms=30000, profile_dir=None, cdp_port=None):
         return {"id": "999", "title": "浏览器解析标题", "author": "作者X",
                 "duration_ms": 12345, "cover": "http://c.jpg",
                 "play_urls": ["http://v.mp4"]}

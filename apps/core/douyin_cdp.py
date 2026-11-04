@@ -121,28 +121,53 @@ async def export_cookies_via_profile(profile_dir: str, port: int | None = None) 
 
 def launch_login_browser(profile_dir: str, port: int | None = None,
                          url: str = LOGIN_URL) -> int:
-    """启动一个**可见**的浏览器窗口（独立 profile + 调试端口），供用户扫码登录。
+    """启动「浏览器桥」：一个常驻的可交互 Chrome 窗口（带 CDP 端口），供用户扫码登录。
 
-    返回进程 PID；进程独立于本服务，服务重启不影响已登录的会话。
+    为什么绕一层 Python 桥进程而不是直接起 chrome.exe：
+    本机受限环境下 subprocess 直接启动 chrome.exe 会立即崩溃（0x80000003），
+    而 Playwright 启动浏览器正常。桥进程独立于 VidLearn 服务，服务重启不影响登录态。
+
+    返回桥进程 PID；用 close_login_browser(pid) 关闭。
     """
     from apps.core import douyin_browser
 
-    exe = douyin_browser.find_chrome()
-    if not exe:
+    if not douyin_browser.find_chrome():
         raise DouyinCDPError("未找到本机 Chrome/Edge 可执行文件")
+    port = port or DEFAULT_PORT
     path = Path(profile_dir)
     path.mkdir(parents=True, exist_ok=True)
-    args = [exe,
-            f"--remote-debugging-port={port or DEFAULT_PORT}",
-            f"--user-data-dir={path}",
-            "--no-first-run", "--no-default-browser-check", url]
+    bridge_log = path.parent / f"bridge-{port}.log"
+    try:
+        bridge_log.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+
+    args = [sys.executable, "-m", "apps.core.douyin_bridge",
+            "--profile", str(path), "--port", str(port), "--url", url]
     flags = 0
     if sys.platform == "win32":
         flags = getattr(subprocess, "DETACHED_PROCESS", 0x00000008) | \
                 getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
-    proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    try:
+        log = open(bridge_log, "ab")
+    except OSError:
+        log = subprocess.DEVNULL
+    proc = subprocess.Popen(args, cwd=str(Path(__file__).resolve().parents[2]),
+                            stdout=log, stderr=log, stdin=subprocess.DEVNULL,
                             creationflags=flags, close_fds=True)
     return proc.pid
+
+
+def close_login_browser(pid: int) -> None:
+    """关闭浏览器桥进程（及其浏览器）。"""
+    try:
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"],
+                           capture_output=True, check=False)
+        else:
+            os.kill(pid, 15)
+    except Exception:
+        pass
 
 
 def cookie_header(cookies: dict[str, str]) -> str:
