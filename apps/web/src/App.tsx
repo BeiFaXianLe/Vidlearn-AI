@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, askQa, fmtSize, fmtTime, mergeCues, type Video, type MediaAsset, type Segment, type Collection } from "./api";
+import SettingsPage from "./SettingsPage";
 
 function platLabel(p?: string): string {
   return p === "bilibili" ? "B站" : p === "douyin" ? "抖音" : "本地";
 }
 
-type View = { name: "home" } | { name: "detail"; id: string } | { name: "tasks" };
+type View = { name: "home" } | { name: "detail"; id: string } | { name: "tasks" } | { name: "settings" };
 
 export default function App() {
   const [view, setView] = useState<View>({ name: "home" });
@@ -36,6 +37,13 @@ export default function App() {
   }
   useEffect(() => {
     refresh();
+  }, []);
+
+  // 从其它位置（如导入弹窗）跳转到设置页
+  useEffect(() => {
+    const go = () => { setImportOpen(false); setView({ name: "settings" }); };
+    window.addEventListener("vl:open-settings", go as EventListener);
+    return () => window.removeEventListener("vl:open-settings", go as EventListener);
   }, []);
 
   // 后台任务：全局轮询（供侧边栏徽章 + 任务管理页使用）
@@ -119,7 +127,10 @@ export default function App() {
           {activeTaskCount > 0 && <span className="count">{activeTaskCount}</span>}
         </button>
         <div className="navlabel">管理</div>
-        <button className="nav" onClick={() => show("设置原型入口")}>
+        <button
+          className={"nav" + (view.name === "settings" ? " active" : "")}
+          onClick={() => setView({ name: "settings" })}
+        >
           <span className="ico">⚙</span>
           <span className="navtext">设置</span>
         </button>
@@ -137,7 +148,7 @@ export default function App() {
       <main className="main">
         <div className="topbar">
           <div className="crumb">
-            工作空间　/　<span>{view.name === "home" ? "视频首页" : view.name === "tasks" ? "任务管理" : "学习工作台"}</span>
+            工作空间　/　<span>{view.name === "home" ? "视频首页" : view.name === "tasks" ? "任务管理" : view.name === "settings" ? "设置" : "学习工作台"}</span>
           </div>
           <div className="top-actions">
             <button className="btn primary" onClick={() => setImportOpen(true)}>
@@ -164,6 +175,8 @@ export default function App() {
             onOpenVideo={openDetail}
             show={show}
           />
+        ) : view.name === "settings" ? (
+          <SettingsPage show={show} />
         ) : (
           <Detail id={view.id} onBack={() => window.history.back()} show={show} />
         )}
@@ -1057,6 +1070,12 @@ function Detail({ id, onBack, show }: { id: string; onBack: () => void; show: (m
                           ))}
                         </ul>
                       </div>
+                      {summary.content?.career_advice ? (
+                        <div className="career-note">
+                          <span className="career-note-label">这对你的职业有什么用</span>
+                          <p>{summary.content.career_advice}</p>
+                        </div>
+                      ) : null}
                       {summary.content?.terms?.length ? (
                         <div className="content-block">
                           <h4>关键术语</h4>
@@ -1299,11 +1318,6 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
   const [stage, setStage] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [cookies, setCookies] = useState<{ bilibili: string; douyin: string }>({ bilibili: "", douyin: "" });
-  const [credSt, setCredSt] = useState<{ bilibili: any; douyin: any }>({ bilibili: null, douyin: null });
-  const [cookieTab, setCookieTab] = useState<"bilibili" | "douyin">("bilibili");
-  const [credCheck, setCredCheck] = useState<{ bilibili: any; douyin: any }>({ bilibili: null, douyin: null });
-  const [cdpBusy, setCdpBusy] = useState(false);
 
   const [favUser, setFavUser] = useState("");
   const [favFolders, setFavFolders] = useState<any[]>([]);
@@ -1317,95 +1331,9 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
   const sources = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
   const totalMB = files.reduce((a, f) => a + f.size, 0) / 1024 / 1024;
 
-  useEffect(() => {
-    (async () => {
-      for (const pf of ["bilibili", "douyin"] as const) {
-        try {
-          const r = await api.credentialStatus(pf);
-          setCredSt((s) => ({ ...s, [pf]: r }));
-        } catch {}
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
-    const j = text.toLowerCase();
-    if (j.includes("douyin.com")) setCookieTab("douyin");
-    else if (j.includes("bilibili.com") || /bv[0-9a-z]{10}/i.test(j)) setCookieTab("bilibili");
-  }, [text]);
-
-  async function saveCookie(pf: "bilibili" | "douyin") {
-    const raw = cookies[pf].trim();
-    if (!raw) return show("请先粘贴 Cookie");
-    try {
-      await api.setCredential(raw, pf);
-      const r = await api.credentialStatus(pf);
-      setCredSt((s) => ({ ...s, [pf]: r }));
-      show((pf === "bilibili" ? "B站" : "抖音") + " Cookie 已加密保存");
-    } catch (e: any) {
-      show("保存失败: " + e.message);
-    }
-  }
-
-  async function verifyCookie(pf: "bilibili" | "douyin") {
-    setCredCheck((s) => ({ ...s, [pf]: { pending: true } }));
-    try {
-      const r = await api.verifyCredential(pf);
-      setCredCheck((s) => ({ ...s, [pf]: r }));
-      show(r.ok ? (r.uname ? "登录有效：" + r.uname : "检测通过") : ("未通过：" + (r.message || "")));
-    } catch (e: any) {
-      setCredCheck((s) => ({ ...s, [pf]: { ok: false, message: e.message } }));
-      show("检测失败: " + e.message);
-    }
-  }
-
-  async function clearCookie(pf: "bilibili" | "douyin") {
-    try {
-      await api.clearCredential(pf);
-      setCookies((s) => ({ ...s, [pf]: "" }));
-      const r = await api.credentialStatus(pf);
-      setCredSt((s) => ({ ...s, [pf]: r }));
-      show("已清除");
-    } catch (e: any) {
-      show("清除失败: " + e.message);
-    }
-  }
-
-  // 抖音 CDP：打开带调试端口的浏览器扫码登录 / 采集 Cookie
-  async function douyinCdpLogin() {
-    setCdpBusy(true);
-    try {
-      const r = await api.douyinCdpLogin();
-      show(r?.ok ? r.message : "启动失败: " + (r?.message || "未知错误"));
-    } catch (e: any) {
-      show("启动浏览器失败: " + e.message);
-    } finally {
-      setCdpBusy(false);
-    }
-  }
-
-  async function douyinCdpFetch() {
-    setCdpBusy(true);
-    try {
-      const r = await api.douyinCdpCookie();
-      if (r?.ok) {
-        setCredSt((s) => ({ ...s, douyin: r }));
-        show(`已采集 ${r.count} 条抖音 Cookie 并加密保存`);
-      } else {
-        show("获取失败: " + (r?.message || "未知错误"));
-      }
-    } catch (e: any) {
-      show("获取失败: " + e.message);
-    } finally {
-      setCdpBusy(false);
-    }
-  }
-
   async function loadFavFolders() {
-    if (!cookies.bilibili.trim()) return show("请先在下方「B站 Cookie」粘贴含 SESSDATA 的 Cookie");
     setFavLoading(true);
     try {
-      await api.setCredential(cookies.bilibili.trim(), "bilibili");
       const r = await api.biliFavFolders();
       if (!r.ok) throw new Error(r.error?.message || "读取失败");
       setFavUser(r.uname || "");
@@ -1467,12 +1395,6 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
       }
       if (!list.length) { show(mode === "local" ? "请选择本地视频文件" : "请至少粘贴一个链接"); return; }
       if (list.length > 20) { show("单次最多 20 条，请分批导入"); return; }
-      try {
-        for (const pf of ["bilibili", "douyin"] as const) {
-          const raw = cookies[pf].trim();
-          if (raw) await api.setCredential(raw, pf);
-        }
-      } catch {}
       setStage("提交导入…");
       const opts: any = {
         max_height: maxHeight === "" ? undefined : maxHeight,
@@ -1557,7 +1479,7 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
         )}
 
         <button className="im-adv-toggle" onClick={() => setAdvOpen((v) => !v)}>
-          {advOpen ? "▾" : "▸"} 更多选项（清晰度 / 后台执行 / 识别与标点 / 平台 Cookie / B站收藏夹）
+          {advOpen ? "▾" : "▸"} 更多选项（清晰度 / 后台执行 / 识别与标点 / B站收藏夹）
         </button>
 
         {advOpen && (
@@ -1577,56 +1499,19 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
             <label className="im-check"><input type="checkbox" checked={autoAsr} disabled={busy} onChange={(e) => setAutoAsr(e.target.checked)} /> 无字幕时自动用本地 faster-whisper 识别</label>
             <label className="im-check"><input type="checkbox" checked={autoPunct} disabled={busy} onChange={(e) => setAutoPunct(e.target.checked)} /> 自动补标点（云端 AI，仅发送字幕文本）</label>
 
-            <div className="im-divider">平台 Cookie（可选）</div>
-            <div className="ck-head">
-              <div className="chiprow" style={{ margin: 0 }}>
-                {(["bilibili", "douyin"] as const).map((pf) => (
-                  <button key={pf} className={"chip" + (cookieTab === pf ? " active" : "")} onClick={() => setCookieTab(pf)}>
-                    {pf === "bilibili" ? "B站" : "抖音"}{credSt[pf]?.status === "valid" ? " ✓" : ""}
-                  </button>
-                ))}
-              </div>
-              <span className="meta" style={{ marginLeft: "auto" }}>
-                {credSt[cookieTab]?.status === "valid" ? "已保存（加密）✓" : "未配置"}
-              </span>
-            </div>
-            <textarea
-              className="im-input"
-              style={{ minHeight: 48, margin: "6px 0" }}
-              placeholder={cookieTab === "bilibili"
-                ? "B站：粘贴 SESSDATA 或完整 Cookie"
-                : "抖音：粘贴完整 Cookie（ttwid / msToken / sessionid…）"}
-              value={cookies[cookieTab]}
-              disabled={busy}
-              onChange={(e) => setCookies((s) => ({ ...s, [cookieTab]: e.target.value }))}
-            />
-            <div className="ck-actions">
-              <button className="btn" disabled={busy} onClick={() => saveCookie(cookieTab)}>保存</button>
-              <button className="btn" disabled={busy} onClick={() => verifyCookie(cookieTab)}>检测登录</button>
-              <button className="btn" disabled={busy} onClick={() => clearCookie(cookieTab)}>清除</button>
-              {cookieTab === "douyin" && (
-                <>
-                  <button className="btn" disabled={busy || cdpBusy} onClick={douyinCdpLogin}>扫码登录</button>
-                  <button className="btn" disabled={busy || cdpBusy} onClick={douyinCdpFetch}>
-                    {cdpBusy ? <span className="spin" /> : "CDP 获取"}
-                  </button>
-                </>
-              )}
-              {credCheck[cookieTab]?.pending && <span className="meta"><span className="spin" /> 检测中…</span>}
-              {credCheck[cookieTab] && !credCheck[cookieTab].pending && (
-                <span className={"meta" + (credCheck[cookieTab].ok ? "" : " ck-bad")}>
-                  {credCheck[cookieTab].ok ? ("✓ " + (credCheck[cookieTab].uname || credCheck[cookieTab].message || "有效"))
-                    : ("✗ " + (credCheck[cookieTab].message || "无效"))}
-                </span>
-              )}
-            </div>
-
             <div className="im-divider">从 B站收藏夹导入</div>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <button className="btn" onClick={loadFavFolders} disabled={busy || favLoading}>
                 {favLoading ? <span className="spin" /> : "读取我的收藏夹"}
               </button>
               {favUser && <span className="meta">已登录：{favUser}</span>}
+              <span className="meta" style={{ marginLeft: "auto" }}>
+                需要先认证 B 站账号？
+                <button className="linkbtn" style={{ marginLeft: 4 }}
+                  onClick={() => window.dispatchEvent(new CustomEvent("vl:open-settings"))}>
+                  去设置
+                </button>
+              </span>
             </div>
             {favFolders.length > 0 && (
               <div className="chiprow" style={{ marginTop: 8 }}>

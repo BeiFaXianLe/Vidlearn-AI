@@ -349,3 +349,80 @@ button,input,textarea,select{font:inherit}button{cursor:pointer;border:0;backgro
 .tbtn.danger:hover{background:#fff6f6}
 .tbtn:disabled{opacity:.4;cursor:not-allowed}
 .task-row.picked{background:#f6f8ff}
+
+/* ============ 设置页：身份认证门户 + 个人职业 ============ */
+/* 设计：设置是配置层，安静、留白、不抢主内容区。绿色只留给「职业建议」一个记忆点。 */
+
+.setpage{max-width:880px}
+.sethead{margin-bottom:26px}
+.sethead h1{font-size:24px;letter-spacing:-.4px;margin:0 0 6px}
+.sethead .sub{margin:0;color:var(--muted);font-size:13px}
+
+.setbody{display:grid;grid-template-columns:186px minmax(0,1fr);gap:34px;align-items:start}
+
+.setnav{display:flex;flex-direction:column;gap:2px;position:sticky;top:18px}
+.setnav-item{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:10px 12px;border-radius:9px;color:#697487;font-weight:600;font-size:13.5px;
+  text-align:left;width:100%;border:0;background:none;cursor:pointer;transition:.15s}
+.setnav-item:hover{background:#f2f5fb;color:#465166}
+.setnav-item.active{background:var(--blue2);color:var(--blue)}
+.dotrow{display:inline-flex;gap:4px}
+.mini-dot{width:6px;height:6px;border-radius:50%;background:#d3d9e4;display:inline-block}
+.mini-dot.on{background:var(--green)}
+
+.setmain{min-width:0}
+.sec-head h2{font-size:17px;margin:0 0 5px;letter-spacing:-.2px}
+.sec-head p{margin:0 0 22px;color:var(--muted);font-size:13px}
+
+/* 渠道切换 */
+.chan-tabs{display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap}
+.chan-tab{display:inline-flex;align-items:center;gap:8px;padding:9px 13px;border-radius:10px;
+  border:1px solid var(--line);background:#fff;color:#5a6478;font-size:13px;font-weight:600;transition:.15s}
+.chan-tab:hover{border-color:#d8deea}
+.chan-tab.on{background:var(--blue2);border-color:#dbe1ff;color:var(--blue)}
+.chan-mark{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;
+  font-size:11px;font-weight:800;color:#fff;line-height:1}
+.mark-bilibili{background:#fb7299}
+.mark-douyin{background:#161823}
+.status-dot{width:7px;height:7px;border-radius:50%;background:#cfd5e0;display:inline-block;flex:none}
+.status-dot.on{background:var(--green);box-shadow:0 0 0 3px #e6f7ef}
+
+.chan-body{border-top:1px solid var(--line);padding-top:20px}
+.chan-state{display:flex;align-items:center;gap:9px;margin-bottom:6px;font-size:13.5px}
+.chan-state b{font-weight:700}
+.chan-state .muted{font-size:12px}
+.chan-hint{margin:0 0 20px;color:#5a6478;font-size:13px;line-height:1.6;max-width:52ch}
+
+.field{display:block;margin-bottom:18px}
+.field>span{display:block;font-size:12.5px;font-weight:600;color:#465166;margin-bottom:7px}
+.field>span em{font-style:normal;color:var(--muted);font-weight:400;margin-left:4px}
+.field textarea,.field input{width:100%;border:1px solid var(--line);border-radius:10px;
+  padding:10px 12px;background:#fff;outline:none;font-size:13px;color:var(--ink);transition:.15s;
+  font-family:inherit}
+.field textarea{min-height:84px;resize:vertical;font-family:ui-monospace,"PingFang SC",monospace;font-size:12px}
+.field input:focus,.field textarea:focus{border-color:#b9c4ff;box-shadow:0 0 0 3px #eef1ff}
+
+.act-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:6px}
+.linkbtn{border:0;background:none;color:#98a1b1;font-size:12.5px;text-decoration:underline;
+  text-underline-offset:3px;cursor:pointer;padding:2px}
+.linkbtn:hover{color:#e5484d}
+.foot-note{margin:16px 0 0;font-size:12px;color:var(--muted);line-height:1.6}
+
+/* 职业标签选择 */
+.tagpick{display:flex;flex-wrap:wrap;gap:7px}
+.tagchip{border:1px solid var(--line);background:#fff;color:#5a6478;border-radius:8px;
+  padding:6px 11px;font-size:12.5px;transition:.15s}
+.tagchip:hover{border-color:#d8deea}
+.tagchip.on{background:var(--blue2);border-color:#dbe1ff;color:var(--blue);font-weight:600}
+
+/* 详情页：职业发展建议 —— 全站唯一用绿色的地方，作为记忆点 */
+.career-note{margin:20px 0 4px;padding:14px 16px 15px;border-left:3px solid var(--green);
+  background:linear-gradient(180deg,#f3fbf7,#f8fdfb);border-radius:0 10px 10px 0}
+.career-note-label{display:block;font-size:11.5px;font-weight:800;color:#15966c;
+  letter-spacing:.3px;margin-bottom:7px}
+.career-note p{margin:0;color:#2c4a3e;font-size:13.5px;line-height:1.7;max-width:60ch}
+
+@media (max-width:720px){
+  .setbody{grid-template-columns:1fr;gap:18px}
+  .setnav{flex-direction:row;position:static;flex-wrap:wrap}
+}

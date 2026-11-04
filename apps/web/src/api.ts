@@ -258,6 +258,19 @@ export const api = {
       body: JSON.stringify({ port }),
     }));
   },
+  // ---- 应用设置：个人职业档案 ----
+  async getProfile() {
+    return j<any>(await fetch(`${BASE}/api/settings/profile`));
+  },
+  async saveProfile(profile: {
+    career: string; tags: string[]; goal: string; industry: string;
+  }) {
+    return j<any>(await fetch(`${BASE}/api/settings/profile`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(profile),
+    }));
+  },
   // ---- B站收藏夹（登录态批量导入） ----
   async biliFavFolders() {
     return j<any>(await fetch(`${BASE}/api/bilibili/fav/folders`));

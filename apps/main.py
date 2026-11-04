@@ -57,6 +57,7 @@ from apps.api_s6_media import router as s6_meta_router  # noqa: E402
 from apps.api_s7 import router as s7_router  # noqa: E402
 from apps.api_v2_ext import router as v2_ext_router  # noqa: E402
 from apps.api_s9_calibrate import router as s9_router  # noqa: E402
+from apps.api_s10_settings import router as s10_router  # noqa: E402
 
 app.include_router(s2_router)
 app.include_router(s3_router)
@@ -67,6 +68,7 @@ app.include_router(s6_meta_router)
 app.include_router(s7_router)
 app.include_router(v2_ext_router)
 app.include_router(s9_router)
+app.include_router(s10_router)
 
 
 @app.get("/api/health")

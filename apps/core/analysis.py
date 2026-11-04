@@ -32,20 +32,45 @@ class AnalysisService:
 
     async def summarize(self, video_id: str, *, mode: str = "quick",
                         caption_id: str | None = None, content_scope: str = "unknown",
-                        model: str = "") -> dict:
+                        model: str = "", profile: dict | None = None) -> dict:
         cues = self._cues(video_id, caption_id)
         if not cues:
             raise ValueError("没有可用字幕，无法生成总结")
         ctx = ai.build_transcript_context(cues)
-        user = (f"视频标题：{self.videos.get(video_id)['title']}\n"
-                f"内容范围：{content_scope}\n字幕：\n{ctx}\n\n"
-                '请输出 {"one_liner":"一句话概括","key_points":["要点"],"terms":["术语"],'
-                '"audience":"适合人群","content_scope":"full|partial|unknown"}')
-        data = await self.llm.complete_json(ai.SYSTEM_SUMMARY, user, ai.SUMMARY_SCHEMA)
+        title = self.videos.get(video_id)["title"]
+
+        # 有职业档案时才要求模型给「职业发展建议」
+        career = (profile or {}).get("career") or ""
+        tags = (profile or {}).get("tags") or []
+        goal = (profile or {}).get("goal") or ""
+        industry = (profile or {}).get("industry") or ""
+        has_profile = bool(career or tags or goal)
+
+        if has_profile:
+            who = "、".join([x for x in ([career] + list(tags)) if x])
+            career_line = (f"我的职业：{who or '未填写'}\n"
+                           f"所在行业：{industry or '未填写'}\n"
+                           f"想达成的目标：{goal or '未填写'}\n")
+            ask = ('请输出 {"one_liner":"一句话概括","key_points":["要点"],"terms":["术语"],'
+                   '"audience":"适合人群","content_scope":"full|partial|unknown",'
+                   '"career_advice":"结合我的职业给出的大白话职业发展建议"}')
+            system = ai.SYSTEM_SUMMARY_CAREER
+        else:
+            career_line = ""
+            ask = ('请输出 {"one_liner":"一句话概括","key_points":["要点"],"terms":["术语"],'
+                   '"audience":"适合人群","content_scope":"full|partial|unknown"}')
+            system = ai.SYSTEM_SUMMARY
+
+        user = (f"视频标题：{title}\n"
+                f"内容范围：{content_scope}\n{career_line}字幕：\n{ctx}\n\n{ask}")
+        data = await self.llm.complete_json(system, user, ai.SUMMARY_SCHEMA)
         data["content_scope"] = content_scope  # 以系统判定为准，不信模型
+        if not has_profile:
+            data.pop("career_advice", None)
         s = self.summaries.add(video_id=video_id, mode=mode, content=data,
                                content_scope=content_scope, model=model, provider="llm",
-                               prompt_version="v1", transcript_hash=transcript_hash(cues),
+                               prompt_version="v2" if has_profile else "v1",
+                               transcript_hash=transcript_hash(cues),
                                plain_text=data.get("one_liner"))
         return s
 

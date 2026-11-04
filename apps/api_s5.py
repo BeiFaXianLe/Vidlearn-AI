@@ -45,12 +45,22 @@ class ChapIn(BaseModel):
 @router.post("/analysis/summary")
 async def summary(body: SumIn, request: Request):
     st = request.app.state
+    # 读取职业档案：有则表示要生成职业发展建议
+    profile = None
+    try:
+        import json
+        from apps.storage.repositories import SettingsRepo
+        raw = SettingsRepo(st.db).get("user_profile")
+        profile = json.loads(raw) if raw else None
+    except Exception:
+        profile = None
     try:
         with st.db_lock:
             s = await _svc(request).summarize(body.video_id, mode=body.mode,
                                               caption_id=body.caption_id,
                                               content_scope=body.content_scope,
-                                              model=st.settings.llm_model)
+                                              model=st.settings.llm_model,
+                                              profile=profile)
         return {"ok": True, "summary": {"id": s["id"], "mode": s["mode"],
                                         "content": s["content"], "scope": s["content_scope"]}}
     except ValueError as e:
