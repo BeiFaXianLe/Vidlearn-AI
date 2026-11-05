@@ -259,7 +259,7 @@ async def task_retry(task_id: str, request: Request):
         raise HTTPException(status_code=400, detail="该任务没有可重试的来源")
     body = IntakeIn(**payload)
     st.jobs.update(task_id, status="running", stage="重新排队", progress=0,
-                   error=None, result=None, control="running")
+                   control="running", _clear=("error", "result"))
     asyncio.create_task(_run_intake(request.app, task_id, body))
     return {"ok": True, "task_id": task_id}
 

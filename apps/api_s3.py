@@ -147,6 +147,30 @@ async def _checkpoint(app, job_id: str) -> None:
         raise TaskCancelled()
 
 
+def _download_sem(st):
+    """全局下载信号量（进程内单例），限制同时下载数，批量导入排队。"""
+    import asyncio as _asyncio
+    sem = getattr(st, "download_sem", None)
+    if sem is None:
+        sem = _asyncio.Semaphore(
+            max(1, int(getattr(st.settings, "download_concurrency", 1) or 1)))
+        st.download_sem = sem
+    return sem
+
+
+async def _wait_slot(sem, app, job_id: str) -> None:
+    """在下载信号量前排队；排队期间可被取消，不占用下载位。"""
+    import asyncio as _asyncio
+    while sem.locked():
+        await _checkpoint(app, job_id)
+        try:
+            await _asyncio.wait_for(sem.acquire(), timeout=0.5)
+            return
+        except _asyncio.TimeoutError:
+            continue
+    await sem.acquire()
+
+
 async def _run_intake(app, job_id: str, body: IntakeIn):
     st = app.state
     db = st.db
@@ -172,12 +196,20 @@ async def _run_intake(app, job_id: str, body: IntakeIn):
         # 任务一旦探明标题就回填，供前端任务面板显示（与视频卡片对应）
         _set_job(app, job_id, title=video["title"], video_id=video["id"])
         await _checkpoint(app, job_id)
-        _set_job(app, job_id, stage="下载媒体", progress=20)
-
         mgr = AcquisitionManager(st.settings.media.temp, st.settings.media.original,
-                                 st.settings.ffmpeg_path)
-        res = await mgr.acquire(ad, body.source, max_height=body.max_height,
-                                download_sections=body.download_sections)
+                                 st.settings.ffmpeg_path,
+                                 timeout_sec=st.settings.download_timeout_sec,
+                                 stall_timeout_sec=st.settings.download_stall_timeout_sec)
+        # 下载并发闸门（默认 1）：批量导入排队下载，避免多路抢带宽而全部超时
+        sem = _download_sem(st)
+        _set_job(app, job_id, stage="等待下载", progress=15)
+        await _wait_slot(sem, app, job_id)
+        try:
+            _set_job(app, job_id, stage="下载媒体", progress=20)
+            res = await mgr.acquire(ad, body.source, max_height=body.max_height,
+                                    download_sections=body.download_sections)
+        finally:
+            sem.release()
         await _checkpoint(app, job_id)
         _set_job(app, job_id, stage="完整性校验", progress=60)
 

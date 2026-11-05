@@ -26,6 +26,9 @@ async def lifespan(app: FastAPI):
     app.state.db = init_db(settings.data_root / "database" / "vidlearn.db")
     app.state.db_lock = threading.RLock()
     app.state.jobs = JobStore(conn=app.state.db, db_lock=app.state.db_lock)
+    # 下载并发闸门（默认 1 路；可用 VIDLEARN_DOWNLOAD_CONCURRENCY 调整）
+    import asyncio as _asyncio
+    app.state.download_sem = _asyncio.Semaphore(max(1, settings.download_concurrency))
 
     # 清理历史遗留的 Cookie 临时文件（凭证安全：绝不能长期留在磁盘）
     try:

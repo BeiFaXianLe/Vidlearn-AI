@@ -4,8 +4,32 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 import shutil
 from pathlib import Path
+
+
+async def _kill_proc_tree(proc) -> None:
+    """结束子进程及其后代（Windows 用 taskkill /T，避免 yt-dlp 孙进程残留）。"""
+    try:
+        if proc.returncode is None:
+            if os.name == "nt":
+                k = await asyncio.create_subprocess_exec(
+                    "taskkill", "/PID", str(proc.pid), "/T", "/F",
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL)
+                try:
+                    await asyncio.wait_for(k.wait(), timeout=10)
+                except Exception:
+                    pass
+            else:
+                proc.kill()
+    except Exception:
+        pass
+    try:
+        await asyncio.wait_for(proc.wait(), timeout=5)
+    except Exception:
+        pass
 
 
 async def run_cmd(args: list[str], timeout: int = 600, cwd: str | None = None) -> tuple[int, str, str]:
@@ -19,9 +43,11 @@ async def run_cmd(args: list[str], timeout: int = 600, cwd: str | None = None) -
     try:
         out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
     except asyncio.TimeoutError:
-        proc.kill()
-        await proc.wait()
+        await _kill_proc_tree(proc)
         return -1, "", "timeout"
+    except asyncio.CancelledError:
+        await _kill_proc_tree(proc)
+        raise
     return proc.returncode, out.decode("utf-8", "ignore"), err.decode("utf-8", "ignore")
 
 

@@ -124,6 +124,8 @@ class DouyinAdapter:
             return AcquireError(ErrorCode.BLOCKED, "抖音风控/需要验证：请稍后重试或更换网络", retryable=True)
         if any(k in t for k in ("not available", "removed", "deleted", "已删除", "404", "no video")):
             return AcquireError(ErrorCode.NOT_AUTHORIZED, "视频不存在或不可访问", retryable=False)
+        if (err or "").strip().lower() == "timeout":
+            return AcquireError(ErrorCode.TIMEOUT, "下载超时（已保留断点，可续传重试）", retryable=True)
         if any(k in t for k in ("timed out", "timeout", "connection", "network", "temporary failure", "getaddrinfo")):
             return AcquireError(ErrorCode.NETWORK, "网络错误，请稍后重试", retryable=True)
         if "unsupported url" in t or "no suitable" in t:
@@ -231,7 +233,10 @@ class DouyinAdapter:
 
         args = [self._ytdlp, "--no-warnings", "--no-playlist",
                 "--merge-output-format", "mp4", "-o", outtmpl,
-                "--add-header", "Referer:https://www.douyin.com/"]
+                "--add-header", "Referer:https://www.douyin.com/",
+                "--continue", "--socket-timeout", "20",
+                "--retries", "10", "--fragment-retries", "10",
+                "--concurrent-fragments", "4"]
         if opts.download_sections:
             args += ["--download-sections", opts.download_sections]
         if opts.audio_only:

@@ -89,6 +89,11 @@ class Settings(BaseSettings):
     max_upload_mb: int = 4096
     max_duration_min: int = 240
 
+    # 下载：并发与单次超时（批量导入排队串行，避免多路抢带宽 + 900s 硬超时死循环）
+    download_concurrency: int = 1
+    download_timeout_sec: int = 3600
+    download_stall_timeout_sec: int = 120   # 下载“无字节增长”多久判为假死并重连
+
     # 字幕安全阈值（S0 实测：末条不得超过视频时长 + 容差）
     subtitle_duration_tolerance_ms: int = 2000
     subtitle_refetch_attempts: int = 3

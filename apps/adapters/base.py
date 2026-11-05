@@ -18,6 +18,7 @@ class ErrorCode(str, enum.Enum):
     BLOCKED = "blocked"
     NOT_AUTHORIZED = "not_authorized"
     NETWORK = "network"
+    TIMEOUT = "timeout"
     MEDIA_INVALID = "media_invalid"
     MEDIA_NO_AUDIO = "media_no_audio"
     SUBTITLE_UNRELIABLE = "subtitle_unreliable"
@@ -56,7 +57,7 @@ class FetchOpts:
     prefer_codec: str = "avc1"          # 优先 H.264（浏览器兼容）
     audio_only: bool = False
     out_dir: Path | None = None
-    timeout_sec: int = 900
+    timeout_sec: int = 3600
     download_sections: str | None = None  # 如 "*0-15" 仅用于验证
 
 

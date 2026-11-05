@@ -163,7 +163,12 @@ class BilibiliAdapter:
         outtmpl = str(out_dir / "%(id)s.%(ext)s")
 
         args = [self._ytdlp, "--no-warnings", "--no-playlist",
-                "--merge-output-format", "mp4", "-o", outtmpl]
+                "--merge-output-format", "mp4", "-o", outtmpl,
+                "--continue",              # 断点续传：复用 .part，重试不再从 0 开始
+                "--socket-timeout", "20",  # 空闲连接 20s 自动重连，避免假死
+                "--retries", "10",
+                "--fragment-retries", "10",
+                "--concurrent-fragments", "4"]  # 多连接：更快，单连接假死不致命
         if opts.download_sections:
             args += ["--download-sections", opts.download_sections]
         # 格式选择
@@ -389,6 +394,10 @@ class BilibiliAdapter:
             return AcquireError(ErrorCode.NEED_LOGIN, "需要登录态")
         if "unsupported url" in low:
             return AcquireError(ErrorCode.UNSUPPORTED_URL, "不支持的 URL")
+        if (err or "").strip().lower() == "timeout":
+            # run_cmd 到点 kill() 的专用标记：并非网络故障，走可续传的超时分支
+            return AcquireError(ErrorCode.TIMEOUT, "下载超时（已保留断点，可续传重试）",
+                                retryable=True)
         if "timed out" in low or "timeout" in low or "connection" in low:
             return AcquireError(ErrorCode.NETWORK, "网络错误", retryable=True)
         if "unable to" in low and "extract" in low:

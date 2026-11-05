@@ -99,7 +99,7 @@ class JobStore:
         j = self._jobs.get(job_id)
         return bool(j and j.get("control") == "paused")
 
-    def update(self, job_id: str, **fields) -> None:
+    def update(self, job_id: str, *, _clear: tuple = (), **fields) -> None:
         with self._lock:
             j = self._jobs.get(job_id)
             if j is None:
@@ -107,6 +107,8 @@ class JobStore:
             for k, v in fields.items():
                 if v is not None:
                     j[k] = v
+            for k in _clear:
+                j[k] = None
             j["updated_at"] = _now()
             self._persist(j)
 
