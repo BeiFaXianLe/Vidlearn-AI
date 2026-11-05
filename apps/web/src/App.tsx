@@ -3,7 +3,7 @@ import { api, askQa, fmtSize, fmtTime, mergeCues, type Video, type MediaAsset, t
 import SettingsPage from "./SettingsPage";
 
 function platLabel(p?: string): string {
-  return p === "bilibili" ? "B站" : p === "douyin" ? "抖音" : "本地";
+  return p === "bilibili" ? "B站" : p === "douyin" ? "抖音" : p === "document" ? "文档" : "本地";
 }
 
 type View = { name: "home" } | { name: "detail"; id: string } | { name: "tasks" } | { name: "settings" };
@@ -152,7 +152,7 @@ export default function App() {
           </div>
           <div className="top-actions">
             <button className="btn primary" onClick={() => setImportOpen(true)}>
-              ＋ 导入视频
+              ＋ 导入资料
             </button>
           </div>
         </div>
@@ -284,7 +284,7 @@ function Home({
       </div>
 
       <div className="stats">
-        <div className="stat"><div className="label">已收录视频</div><strong>{videos.length}</strong><em>本地媒体库</em></div>
+        <div className="stat"><div className="label">已收录资料</div><strong>{videos.length}</strong><em>本地媒体库</em></div>
         <div className="stat"><div className="label">累计时长</div><strong>{totalMin}m</strong><em>本地保存</em></div>
         <div className="stat"><div className="label">字幕就绪</div><strong>{videos.filter((v) => v.transcript_status === "complete").length}</strong><em>可生成总结</em></div>
         <div className="stat clickable" onClick={onOpenTasks}><span className="goarrow">任务管理 →</span><div className="label">待处理任务</div><strong>{activeTaskCount}</strong><em style={{ color: "var(--orange)" }}>{activeTaskCount ? "处理中" : "暂无排队"}</em></div>
@@ -396,15 +396,15 @@ function Home({
           <span>⌕</span>
           <input placeholder="搜索视频标题、作者..." value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
-        {["all", "bilibili", "douyin", "local"].map((p) => (
+        {["all", "bilibili", "douyin", "local", "document"].map((p) => (
           <button key={p} className={"chip" + (pf === p ? " selected" : "")} onClick={() => setPf(p)}>
-            {p === "all" ? "全部" : p === "bilibili" ? "B站" : p === "douyin" ? "抖音" : "本地"}
+            {p === "all" ? "全部" : p === "bilibili" ? "B站" : p === "douyin" ? "抖音" : p === "document" ? "文档" : "本地"}
           </button>
         ))}
       </div>
 
       {filtered.length === 0 ? (
-        <div className="empty">{favMode ? "还没有收藏的视频。在卡片右上角点 ☆ 收藏。" : "还没有视频。点击右上角「导入视频」开始。"}</div>
+        <div className="empty">{favMode ? "还没有收藏的视频。在卡片右上角点 ☆ 收藏。" : "还没有资料。点击右上角「导入资料」开始。"}</div>
       ) : (
         <div className="grid">
           {filtered.map((v, i) => (
@@ -412,7 +412,7 @@ function Home({
               <div className="cover" style={{ background: coverPalette[i % coverPalette.length] }}>
                 <span className="platform">{platLabel(v.platform)}</span>
                 <span>{v.title.slice(0, 28)}</span>
-                <span className="duration">{fmtTime(v.duration_ms)}</span>
+                <span className="duration">{v.platform === "document" ? "文档" : fmtTime(v.duration_ms)}</span>
                 <button
                   className={"favbtn" + (v.favorite ? " on" : "")}
                   title={v.favorite ? "取消收藏" : "加入收藏"}
@@ -424,14 +424,19 @@ function Home({
               <div className="cardbody">
                 <h3>{v.title}</h3>
                 <div className="meta">
-                  {v.author || "未知作者"}　·　{fmtTime(v.duration_ms)}
+                  {v.platform === "document" ? "本地文档" : (v.author || "未知作者")}
+                  {v.platform !== "document" && <>　·　{fmtTime(v.duration_ms)}</>}
                   {v.size_bytes ? `　·　${fmtSize(v.size_bytes)}` : ""}
                 </div>
                 <div className="tags">
-                  <span className={"tag" + (v.transcript_status === "complete" ? " ai" : " warn")}>
-                    字幕 {v.transcript_status}
-                  </span>
-                  <span className="tag">媒体 {v.media_status}</span>
+                  {v.platform === "document" ? (
+                    <span className="tag ai">文档 已解析</span>
+                  ) : (
+                    <span className={"tag" + (v.transcript_status === "complete" ? " ai" : " warn")}>
+                      字幕 {v.transcript_status}
+                    </span>
+                  )}
+                  {v.platform !== "document" && <span className="tag">媒体 {v.media_status}</span>}
                 </div>
               </div>
               <button
@@ -917,6 +922,10 @@ function Detail({ id, onBack, show }: { id: string; onBack: () => void; show: (m
     }
   }
 
+  if (data?.video?.platform === "document") {
+    return <DocumentDetail id={id} onBack={onBack} show={show} />;
+  }
+
   return (
     <>
       <div className="detail-head">
@@ -1304,11 +1313,108 @@ function Detail({ id, onBack, show }: { id: string; onBack: () => void; show: (m
   );
 }
 
+function DocumentDetail({ id, onBack, show }: { id: string; onBack: () => void; show: (m: string) => void }) {
+  const [doc, setDoc] = useState<any>(null);
+  const [err, setErr] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setDoc(await api.getDocument(id));
+      } catch (e: any) {
+        setErr(e.message || "加载失败");
+      }
+      setNote(localStorage.getItem("note:" + id) || "");
+    })();
+  }, [id]);
+
+  async function saveNote() {
+    setBusy(true);
+    try {
+      if (note.trim()) await api.saveNote(id, note.trim());
+      localStorage.setItem("note:" + id, note);
+      show("笔记已保存到数据库");
+    } catch (e: any) {
+      show("保存失败: " + e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    if (!confirm("确定删除该文档资料？将同时删除解析文本与源文件。")) return;
+    try {
+      await api.deleteVideo(id, true, true);
+      show("已删除");
+      onBack();
+    } catch (e: any) {
+      show("删除失败: " + e.message);
+    }
+  }
+
+  const v = doc?.video;
+  const d = doc?.document;
+  return (
+    <>
+      <div className="detail-head">
+        <button className="back" onClick={onBack}>← 返回资料库</button>
+        <span className="detail-title">{v?.title || "加载中..."}</span>
+        <span className="detail-meta">
+          文档 · {d?.format_label || "?"}{d ? ` · ${d.char_count} 字` : ""}
+        </span>
+      </div>
+
+      <div className="workspace">
+        <div className="leftcol">
+          <div className="sectionline">
+            <h2>文档原文</h2>
+            <span className="muted">{d?.format_label || ""}</span>
+          </div>
+          <div className="panel">
+            <div className="panelcontent">
+              {err ? (
+                <div className="muted">加载失败：{err}</div>
+              ) : (
+                <pre className="doc-content">{doc?.content || "加载中…"}</pre>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="rightcol">
+          <div className="panel">
+            <div className="sectionline">
+              <h2>学习笔记</h2>
+              <span className="muted">自动保存到本地</span>
+            </div>
+            <div className="panelcontent">
+              <textarea
+                className="notearea"
+                value={note}
+                placeholder="记录你的理解、疑问、要点……"
+                onChange={(e) => setNote(e.target.value)}
+              />
+              <div className="right-actions">
+                <button className="btn primary" disabled={busy} onClick={saveNote}>保存笔记</button>
+                <button className="btn" onClick={remove}>删除资料</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: () => void; show: (m: string) => void }) {
-  const [mode, setMode] = useState<"link" | "local">("link");
+  const [mode, setMode] = useState<"link" | "local" | "doc">("link");
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
+  const [docFiles, setDocFiles] = useState<File[]>([]);
+  const [docDragging, setDocDragging] = useState(false);
   const [maxHeight, setMaxHeight] = useState<number | "">("");
   const [autoAsr, setAutoAsr] = useState(true);
   const [autoPunct, setAutoPunct] = useState(true);
@@ -1330,6 +1436,8 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
 
   const sources = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
   const totalMB = files.reduce((a, f) => a + f.size, 0) / 1024 / 1024;
+  const docTotalMB = docFiles.reduce((a, f) => a + f.size, 0) / 1024 / 1024;
+  const docRef = useRef<HTMLInputElement>(null);
 
   async function loadFavFolders() {
     setFavLoading(true);
@@ -1379,10 +1487,31 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
     setFiles((prev) => [...prev, ...ok]);
   }
 
+  function addDocFiles(fl: FileList | null) {
+    if (!fl) return;
+    const ok = Array.from(fl).filter((f) => /\.(html?|md|markdown|txt)$/i.test(f.name));
+    if (!ok.length) return show("请选择 HTML / Markdown / TXT 文档");
+    setDocFiles((prev) => [...prev, ...ok]);
+  }
+
   async function submit(force = false, explicit?: string[]) {
     if (busy) return;
     setBusy(true);
     try {
+      if (mode === "doc" && !(explicit && explicit.length)) {
+        if (!docFiles.length) { show("请选择文档文件"); return; }
+        setStage("解析并导入文档…");
+        const r = await api.importDocuments(docFiles);
+        const n = r.count || 0;
+        const failed = r.failed || [];
+        if (failed.length) {
+          show(`成功 ${n} 个，失败 ${failed.length} 个：${failed[0]?.error?.message || ""}`);
+        } else {
+          show(`已导入 ${n} 个文档`);
+        }
+        if (n) onDone();
+        return;
+      }
       let list: string[] = [];
       if (explicit && explicit.length) list = explicit;
       else if (mode === "local") {
@@ -1421,19 +1550,20 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
     }
   }
 
-  const activeCount = mode === "local" ? files.length : sources.length;
+  const activeCount = mode === "local" ? files.length : mode === "doc" ? docFiles.length : sources.length;
 
   return (
     <div className="modalback" onClick={(e) => e.target === e.currentTarget && !busy && onClose()}>
       <div className="modal im-modal">
         <div className="im-head">
-          <h2>导入视频</h2>
+          <h2>导入资料</h2>
           <button className="im-x" onClick={onClose} disabled={busy} aria-label="关闭">×</button>
         </div>
 
         <div className="im-seg">
           <button className={"im-seg-btn" + (mode === "link" ? " on" : "")} onClick={() => setMode("link")} disabled={busy}>链接导入</button>
           <button className={"im-seg-btn" + (mode === "local" ? " on" : "")} onClick={() => setMode("local")} disabled={busy}>本地文件</button>
+          <button className={"im-seg-btn" + (mode === "doc" ? " on" : "")} onClick={() => setMode("doc")} disabled={busy}>文档导入</button>
         </div>
 
         {mode === "link" ? (
@@ -1447,6 +1577,34 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
               autoFocus
             />
             <div className="im-summary">已识别 <b>{sources.length}</b> 个链接（单次最多 20 个）</div>
+          </div>
+        ) : mode === "doc" ? (
+          <div className="im-canvas">
+            <div
+              className={"im-drop" + (docDragging ? " drag" : "")}
+              onClick={() => docRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setDocDragging(true); }}
+              onDragLeave={() => setDocDragging(false)}
+              onDrop={(e) => { e.preventDefault(); setDocDragging(false); addDocFiles(e.dataTransfer.files); }}
+            >
+              <div className="im-drop-icon">⤓</div>
+              <div className="im-drop-title">拖拽文档到这里，或点击选择文件</div>
+              <div className="im-drop-sub">支持 HTML / Markdown(.md) / TXT，可多选</div>
+              <input
+                ref={docRef}
+                type="file"
+                multiple
+                accept=".html,.htm,.md,.markdown,.txt,text/html,text/markdown,text/plain"
+                style={{ display: "none" }}
+                onChange={(e) => { addDocFiles(e.target.files); e.target.value = ""; }}
+              />
+            </div>
+            {docFiles.length > 0 && (
+              <div className="im-summary">
+                已选 <b>{docFiles.length}</b> 个文档 · 共 {docTotalMB.toFixed(1)} MB
+                <button className="im-clear" onClick={() => setDocFiles([])} disabled={busy}>清空</button>
+              </div>
+            )}
           </div>
         ) : (
           <div className="im-canvas">

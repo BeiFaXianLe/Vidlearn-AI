@@ -9,7 +9,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 SCHEMA_SQL = """
 PRAGMA foreign_keys = ON;
@@ -236,6 +236,26 @@ CREATE TABLE IF NOT EXISTS caption_qc (
 """
 
 
+SCHEMA_V8_SQL = """
+PRAGMA foreign_keys = ON;
+
+-- 文档资料明细（V8）：条目本身复用 videos(platform='document')，
+-- 正文由解析器生成后存于此表；不写 media_assets，避免污染媒体/占用统计。
+CREATE TABLE IF NOT EXISTS documents (
+    video_id    TEXT PRIMARY KEY REFERENCES videos(id) ON DELETE CASCADE,
+    format      TEXT NOT NULL,                       -- html / markdown / txt
+    source_path TEXT,                                -- 保存到 data/documents 的源文件
+    size_bytes  INTEGER NOT NULL DEFAULT 0,
+    sha256      TEXT NOT NULL,
+    char_count  INTEGER NOT NULL DEFAULT 0,
+    content     TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_documents_sha ON documents(sha256);
+"""
+
+
 def connect(db_path: Path) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     # FastAPI 的同步路由在线程池执行，连接需允许跨线程；并发写入用锁保护
@@ -293,6 +313,9 @@ def migrate(conn: sqlite3.Connection) -> int:
     if ver < 7:
         conn.executescript(SCHEMA_V7_SQL)
         ver = 7
+    if ver < 8:
+        conn.executescript(SCHEMA_V8_SQL)
+        ver = 8
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()
     return SCHEMA_VERSION

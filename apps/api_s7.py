@@ -4,7 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from apps.storage import MediaAssetRepo, SegmentRepo, SourceCaptionRepo, VideoRepo
+from apps.storage import DocumentRepo, MediaAssetRepo, SegmentRepo, SourceCaptionRepo, VideoRepo
 from apps.storage.analysis_repos import ChapterRepo, KnowledgePointRepo, SummaryRepo
 
 router = APIRouter(prefix="/api", tags=["s7"])
@@ -84,12 +84,20 @@ def delete_video(video_id: str, request: Request, delete_media: bool = True,
         if not v:
             raise HTTPException(status_code=404, detail="视频不存在")
         assets = MediaAssetRepo(db).for_video(video_id)
+        # 文档资料：解析正文随条目级联删除；源文件需显式清理
+        doc = DocumentRepo(db).get(video_id)
         if delete_media:
             for a in assets:
                 p = a["storage_path"]
                 try:
                     if os.path.exists(p):
                         os.remove(p)
+                except OSError:
+                    pass
+            if doc and doc.get("source_path"):
+                try:
+                    if os.path.exists(doc["source_path"]):
+                        os.remove(doc["source_path"])
                 except OSError:
                     pass
         if delete_knowledge:

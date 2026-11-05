@@ -205,6 +205,18 @@ export const api = {
     if (!r.ok) throw new Error(data.detail || "批量导入失败");
     return data;
   },
+  // ---- 文档解析导入 ----
+  async importDocuments(files: File[]) {
+    const fd = new FormData();
+    files.forEach((f) => fd.append("files", f));
+    const r = await fetch(`${BASE}/api/documents/import`, { method: "POST", body: fd });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.detail || "文档导入失败");
+    return data;
+  },
+  async getDocument(videoId: string) {
+    return j<any>(await fetch(`${BASE}/api/documents/${videoId}`));
+  },
   // ---- 任务控制 ----
   async taskControl(taskId: string, action: "pause" | "resume" | "cancel" | "retry") {
     return j<any>(await fetch(`${BASE}/api/tasks/${taskId}/${action}`, { method: "POST" }));

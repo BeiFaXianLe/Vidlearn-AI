@@ -24,6 +24,7 @@
 | [UI_NOTES.md](UI_NOTES.md) | 前端 UI 结构与交互（对齐原型 V1.1） |
 | [V2_FEATURES.md](V2_FEATURES.md) | 磁盘/批量导入/收藏/任务控制/问答 |
 | [DOUYIN.md](DOUYIN.md) | 抖音支持（基于 yt-dlp） |
+| [DOC_IMPORT.md](DOC_IMPORT.md) | **文档解析导入（HTML/Markdown/TXT）** |
 | [DEPLOY_LINUX.md](DEPLOY_LINUX.md) | **Linux 部署方案**（systemd / Docker / Nginx / 迁移） |
 | [DEPLOY_MACOS.md](DEPLOY_MACOS.md) | **macOS 部署方案**（launchd / Homebrew / Docker） |
 

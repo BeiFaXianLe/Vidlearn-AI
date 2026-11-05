@@ -135,6 +135,38 @@ class SettingsRepo:
             return default
 
 
+class DocumentRepo:
+    """文档资料明细（V8）。条目主体在 videos(platform='document')，此处存解析正文。"""
+
+    def __init__(self, conn: sqlite3.Connection):
+        self.conn = conn
+
+    def upsert(self, *, video_id: str, format: str, source_path: str | None,
+               size_bytes: int, sha256: str, char_count: int, content: str) -> dict:
+        self.conn.execute(
+            "INSERT INTO documents(video_id, format, source_path, size_bytes, sha256,"
+            " char_count, content) VALUES(?,?,?,?,?,?,?)"
+            " ON CONFLICT(video_id) DO UPDATE SET format=excluded.format,"
+            " source_path=excluded.source_path, size_bytes=excluded.size_bytes,"
+            " sha256=excluded.sha256, char_count=excluded.char_count,"
+            " content=excluded.content, updated_at=datetime('now')",
+            (video_id, format, source_path, size_bytes, sha256, char_count, content))
+        self.conn.commit()
+        return self.get(video_id)
+
+    def get(self, video_id: str) -> dict | None:
+        return _row(self.conn.execute(
+            "SELECT * FROM documents WHERE video_id=?", (video_id,)).fetchone())
+
+    def by_sha(self, sha256: str) -> dict | None:
+        return _row(self.conn.execute(
+            "SELECT * FROM documents WHERE sha256=?", (sha256,)).fetchone())
+
+    def delete(self, video_id: str) -> None:
+        self.conn.execute("DELETE FROM documents WHERE video_id=?", (video_id,))
+        self.conn.commit()
+
+
 class MediaAssetRepo:
     def __init__(self, conn: sqlite3.Connection):
         self.conn = conn

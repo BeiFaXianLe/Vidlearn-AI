@@ -4,6 +4,7 @@ from apps.storage.collections import CollectionRepo
 from apps.storage.glossary_repo import GlossaryRepo, extract_candidates
 from apps.storage.calibration_repo import CaptionChangeRepo, CaptionQCRepo
 from apps.storage.repositories import (
+    DocumentRepo,
     MediaAssetRepo,
     SegmentRepo,
     SettingsRepo,
@@ -14,5 +15,6 @@ from apps.storage.repositories import (
 __all__ = [
     "SCHEMA_VERSION", "connect", "init_db", "migrate",
     "VideoRepo", "MediaAssetRepo", "SourceCaptionRepo", "SegmentRepo", "SettingsRepo",
+    "DocumentRepo",
     "CollectionRepo", "GlossaryRepo", "CaptionChangeRepo", "CaptionQCRepo", "extract_candidates",
 ]
