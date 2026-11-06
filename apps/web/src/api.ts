@@ -291,6 +291,14 @@ export const api = {
     const q = `?media_id=${encodeURIComponent(mediaId)}&page=${page}&page_size=${pageSize}`;
     return j<any>(await fetch(`${BASE}/api/bilibili/fav/items${q}`));
   },
+  // ---- 抖音收藏夹（登录态批量导入，浏览器通道拦截签名接口） ----
+  async douyinFavFolders() {
+    return j<any>(await fetch(`${BASE}/api/douyin/fav/folders`));
+  },
+  async douyinFavItems(collectsId: string, cursor = 0, count = 20) {
+    const q = `?collects_id=${encodeURIComponent(collectsId)}&cursor=${cursor}&count=${count}`;
+    return j<any>(await fetch(`${BASE}/api/douyin/fav/items${q}`));
+  },
   mediaUrl(videoId: string, assetId?: string) {
     return `${BASE}/api/videos/${videoId}/media${assetId ? `?asset_id=${assetId}` : ""}`;
   },

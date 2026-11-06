@@ -245,6 +245,206 @@ async def resolve(url: str, *, browser_path: str | None = None,
     }
 
 
+# ---------------- 收藏夹（收藏）读取通道 ----------------
+#
+# 抖音 web 接口（collects/list、collects/video/list）需要 a_bogus 运行时签名，
+# 裸 HTTP 必被 403。这里复用浏览器通道：打开「我的收藏」页面，让真实浏览器
+# 完成签名与风控，再拦截页面自己发出的这两个接口 JSON。
+COLLECT_PAGE_URL = "https://www.douyin.com/user/self?showTab=collect"
+_COLLECTS_LIST_API = "collects/list"
+_COLLECTS_VIDEO_API = "collects/video/list"
+
+
+def _first(d: dict, *keys, default=None):
+    """按顺序取第一个非空字段（兼容抖音不同版本字段名）。"""
+    for k in keys:
+        v = d.get(k)
+        if v not in (None, "", [], {}):
+            return v
+    return default
+
+
+def _parse_collect_folders(payload: dict) -> list[dict]:
+    """解析收藏夹（收藏合集/收藏夹）列表响应。"""
+    infos = _first(payload or {}, "collects_infos", "collects", "data")
+    if isinstance(infos, dict):          # 少数版本包在 data 下
+        infos = _first(infos, "collects_infos", "collects", default=[])
+    folders: list[dict] = []
+    for f in (infos or []):
+        if not isinstance(f, dict):
+            continue
+        cid = _first(f, "collects_id", "collect_id", "id")
+        if cid in (None, ""):
+            continue
+        folders.append({
+            "id": str(cid),
+            "title": _first(f, "collects_name", "name", "title", default="未命名收藏夹"),
+            "count": int(_first(f, "total_number", "count", "video_count", default=0) or 0),
+            "cover": _first(f, "cover_url", "cover", default=""),
+        })
+    return folders
+
+
+def _parse_collect_videos(payload: dict) -> dict:
+    """解析收藏夹内视频列表响应，返回 {items, has_more, cursor}。
+
+    丢弃已失效（无 aweme_id）或非视频项；避免产生半成品数据。
+    """
+    awemes = _first(payload or {}, "aweme_list", "awemes", "data", default=[]) or []
+    items: list[dict] = []
+    for a in awemes:
+        if not isinstance(a, dict):
+            continue
+        aid = _first(a, "aweme_id", "id")
+        if aid in (None, ""):
+            continue
+        video = a.get("video") or {}
+        duration_ms = int(_first(a, "duration", default=0) or 0) or int(
+            _first(video, "duration", default=0) or 0)
+        cover = None
+        if isinstance(video.get("cover"), dict):
+            cover = (video["cover"].get("url_list") or [None])[0]
+        items.append({
+            "aweme_id": str(aid),
+            "title": (_first(a, "desc", "title", default="") or "").strip() or "抖音视频",
+            "author": ((a.get("author") or {}).get("nickname")) or "",
+            "duration_ms": duration_ms,
+            "cover": cover or "",
+            "url": f"https://www.douyin.com/video/{aid}",
+        })
+    has_more = bool(_first(payload or {}, "has_more", default=False))
+    cursor = _first(payload or {}, "cursor", "max_cursor", default=0)
+    return {"items": items, "has_more": has_more, "cursor": int(cursor or 0)}
+
+
+async def fetch_collect_folders(*, browser_path: str | None = None,
+                                profile_dir: str | None = None,
+                                cookies: dict[str, str] | None = None,
+                                timeout_ms: int = 30000) -> dict:
+    """打开「我的收藏」页面，拦截 collects/list 响应，返回 {folders, user}。
+
+    需要登录态（profile_dir 或 cookies）；未登录/风控时抛 DouyinResolveError。
+    """
+    captured: dict = {}
+    await _open_collect_page(
+        _COLLECTS_LIST_API, COLLECT_PAGE_URL, captured,
+        browser_path=browser_path, profile_dir=profile_dir,
+        cookies=cookies, timeout_ms=timeout_ms)
+    payload = captured.get("folders")
+    if payload is None:
+        raise DouyinResolveError(
+            "need_login", "未读取到收藏夹列表：请先登录抖音，或稍后重试（可能被风控）")
+    folders = _parse_collect_folders(payload)
+    user = ""
+    try:
+        user = (((payload or {}).get("user") or {}).get("nickname")) or ""
+    except Exception:
+        user = ""
+    return {"user": user, "folders": folders}
+
+
+async def fetch_collect_videos(collects_id: str, *, cursor: int = 0, count: int = 20,
+                               browser_path: str | None = None,
+                               profile_dir: str | None = None,
+                               cookies: dict[str, str] | None = None,
+                               timeout_ms: int = 30000) -> dict:
+    """打开某个收藏夹页面，拦截 collects/video/list 响应，返回 {items, has_more, cursor}。"""
+    url = (f"https://www.douyin.com/user/self?showTab=collect"
+           f"&collects_id={collects_id}")
+    captured: dict = {}
+    await _open_collect_page(
+        _COLLECTS_VIDEO_API, url, captured,
+        browser_path=browser_path, profile_dir=profile_dir,
+        cookies=cookies, timeout_ms=timeout_ms)
+    payload = captured.get("videos")
+    if payload is None:
+        raise DouyinResolveError(
+            "need_login", "未读取到收藏夹内容：请先登录抖音，或稍后重试（可能被风控）")
+    return _parse_collect_videos(payload)
+
+
+async def _open_collect_page(api_keyword: str, page_url: str, captured: dict, *,
+                             browser_path: str | None, profile_dir: str | None,
+                             cookies: dict[str, str] | None, timeout_ms: int) -> None:
+    """打开页面并拦截指定收藏接口（api_keyword）一次响应，写入 captured。"""
+    if not playwright_available():
+        raise DouyinResolveError("internal", "未安装 playwright")
+    ensure_playwright_temp()
+    from playwright.async_api import async_playwright
+
+    slot = "folders" if api_keyword == _COLLECTS_LIST_API else "videos"
+    async with async_playwright() as p:
+        launch_options = {"headless": True,
+                          "args": ["--disable-blink-features=AutomationControlled",
+                                   "--disable-dev-shm-usage"]}
+        ctx_options = {"user_agent": UA, "viewport": {"width": 1280, "height": 900},
+                       "locale": "zh-CN"}
+        bp = browser_path or find_chrome()
+        if bp:
+            launch_options["executable_path"] = bp
+        browser = None
+        try:
+            if profile_dir:
+                Path(profile_dir).mkdir(parents=True, exist_ok=True)
+                ctx = await p.chromium.launch_persistent_context(
+                    str(profile_dir), **launch_options, **ctx_options)
+            else:
+                browser = await p.chromium.launch(**launch_options)
+                ctx = await browser.new_context(**ctx_options)
+        except Exception as e:  # noqa: BLE001
+            raise DouyinResolveError("internal", f"启动浏览器失败：{str(e)[:120]}")
+        if cookies:
+            try:
+                await ctx.add_cookies([
+                    {"name": k, "value": v, "domain": ".douyin.com", "path": "/"}
+                    for k, v in cookies.items() if k and v
+                ])
+            except Exception:
+                pass
+        page = await ctx.new_page() if not ctx.pages else ctx.pages[0]
+
+        async def on_resp(resp):
+            u = resp.url
+            if api_keyword in u and slot not in captured:
+                try:
+                    if "json" not in (resp.headers.get("content-type", "") or ""):
+                        return
+                    txt = await resp.text()
+                    if not txt or len(txt) < 20:
+                        return
+                    data = json.loads(txt)
+                    if isinstance(data, dict):
+                        captured[slot] = data
+                except Exception:
+                    pass
+
+        page.on("response", on_resp)
+        try:
+            await page.goto(page_url, wait_until="domcontentloaded", timeout=timeout_ms)
+        except Exception:
+            pass
+        # 等待目标接口响应；首屏偶发不触发，再刷新一次
+        steps = max(1, timeout_ms // 300)
+        for attempt in range(2):
+            for _ in range(steps):
+                if slot in captured:
+                    break
+                await asyncio.sleep(0.3)
+            if slot in captured:
+                break
+            if attempt == 0:
+                try:
+                    await page.reload(wait_until="domcontentloaded", timeout=timeout_ms)
+                except Exception:
+                    pass
+        try:
+            await ctx.close()
+            if browser is not None:
+                await browser.close()
+        except Exception:
+            pass
+
+
 def download(play_urls: list[str], out_path: Path, *, timeout: int = 120) -> Path:
     """按候选地址依次尝试，流式下载到 out_path。"""
     out_path.parent.mkdir(parents=True, exist_ok=True)

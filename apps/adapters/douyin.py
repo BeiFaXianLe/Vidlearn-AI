@@ -148,6 +148,67 @@ class DouyinAdapter:
                     "message": "Cookie 缺少 ttwid/msToken/sessionid 等关键字段"}
         return {"ok": True, "keys": keys, "message": "已配置（抖音无离线登录校验，导入时以实际解析为准）"}
 
+    def _login_cookies(self) -> dict[str, str] | None:
+        """从凭证库取抖音 Cookie（dict），供浏览器通道注入登录态。"""
+        if not self._cookies:
+            return None
+        try:
+            c = self._cookies.get("douyin")
+        except Exception:
+            return None
+        return dict(c) if c else None
+
+    def _browser_kwargs(self) -> dict:
+        """浏览器通道所需的登录态参数：优先使用持久化 profile（扫码登录），
+        否则注入已采集的 Cookie。"""
+        kw: dict = {"browser_path": self._browser_path or None,
+                    "profile_dir": self._profile_dir or None}
+        if not self._profile_dir:
+            ck = self._login_cookies()
+            if ck:
+                kw["cookies"] = ck
+        return kw
+
+    # ---------- 收藏夹读取（登录态，复用浏览器通道拦截签名接口） ----------
+    async def fetch_fav_folders(self) -> dict:
+        """读取当前登录抖音账号的收藏夹（收藏合集）列表。
+
+        复用 Playwright 浏览器通道在页面上下文拦截 `collects/list`，
+        不裸 HTTP（抖音 web 接口需 a_bogus 签名）。返回：
+        {"user": str, "folders": [{"id","title","count","cover"}]}
+        """
+        if not self._browser_enabled():
+            raise AcquireError(
+                ErrorCode.INTERNAL,
+                "抖音收藏导入需要启用浏览器通道（需安装 playwright + 本机 Chrome/Edge）")
+        try:
+            r = await douyin_browser.fetch_collect_folders(**self._browser_kwargs())
+        except douyin_browser.DouyinResolveError as e:
+            raise self._map_browser_error(e)
+        return {"user": r.get("user") or "", "folders": r.get("folders") or []}
+
+    async def fetch_fav_items(self, collects_id: str, *, cursor: int = 0,
+                              count: int = 20) -> dict:
+        """读取某个抖音收藏夹内的视频，返回 aweme_id 对应的视频链接供批量导入复用。
+
+        失效（已删除/私密）的视频没有 aweme_id，直接跳过，不产生半成品。
+        """
+        if not self._browser_enabled():
+            raise AcquireError(
+                ErrorCode.INTERNAL,
+                "抖音收藏导入需要启用浏览器通道（需安装 playwright + 本机 Chrome/Edge）")
+        try:
+            r = await douyin_browser.fetch_collect_videos(
+                str(collects_id), cursor=cursor, count=count, **self._browser_kwargs())
+        except douyin_browser.DouyinResolveError as e:
+            raise self._map_browser_error(e)
+        return {
+            "collects_id": str(collects_id),
+            "cursor": r.get("cursor", 0),
+            "has_more": bool(r.get("has_more")),
+            "items": r.get("items") or [],
+        }
+
     # ---------- 探测 ----------
     async def probe(self, url: str) -> VideoMeta:
         url = normalize_douyin_url(url)

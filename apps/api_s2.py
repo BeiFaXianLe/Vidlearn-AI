@@ -268,6 +268,43 @@ async def bili_fav_items(media_id: str, request: Request, page: int = 1, page_si
         return {"ok": False, "error": {"code": e.code.value, "message": e.message}}
 
 
+# ---------------- 抖音收藏（登录态批量导入，浏览器通道拦截签名接口） ----------------
+def _douyin(request: Request) -> DouyinAdapter:
+    st = _state(request)
+    return DouyinAdapter(yt_dlp_path=st.settings.yt_dlp_path,
+                         ffprobe=st.settings.ffprobe_path,
+                         cookie_provider=_cred(request),
+                         cookie_tmp_dir=st.settings.media.temp / "cookies",
+                         cookies_from_browser=st.settings.ytdlp_cookies_from_browser,
+                         use_browser=st.settings.douyin_use_browser,
+                         browser_path=st.settings.douyin_browser_path,
+                         profile_dir=str(_douyin_profile_dir(st)),
+                         cdp_port=st.settings.douyin_cdp_port)
+
+
+@router.get("/douyin/fav/folders")
+async def douyin_fav_folders(request: Request):
+    """读取当前登录抖音账号的收藏夹（收藏合集）列表。"""
+    try:
+        r = await _douyin(request).fetch_fav_folders()
+        return {"ok": True, **r}
+    except AcquireError as e:
+        return {"ok": False, "error": {"code": e.code.value, "message": e.message}}
+
+
+@router.get("/douyin/fav/items")
+async def douyin_fav_items(collects_id: str, request: Request,
+                           cursor: int = 0, count: int = 20):
+    """分页读取某抖音收藏夹内的视频（返回视频链接，供批量导入复用）。"""
+    cursor = max(0, int(cursor or 0))
+    count = max(1, min(int(count or 20), 50))
+    try:
+        r = await _douyin(request).fetch_fav_items(collects_id, cursor=cursor, count=count)
+        return {"ok": True, **r}
+    except AcquireError as e:
+        return {"ok": False, "error": {"code": e.code.value, "message": e.message}}
+
+
 @router.get("/transcript/tracks")
 async def transcript_tracks(source: str, request: Request):
     """获取平台字幕（B站）。返回轨道与选定结果的摘要，不含全文。"""
