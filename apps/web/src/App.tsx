@@ -1434,6 +1434,16 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
   const [favPage, setFavPage] = useState(1);
   const [favHasMore, setFavHasMore] = useState(false);
 
+  // 抖音收藏
+  const [dyUser, setDyUser] = useState("");
+  const [dyFolders, setDyFolders] = useState<any[]>([]);
+  const [dyLoading, setDyLoading] = useState(false);
+  const [dyActiveFolder, setDyActiveFolder] = useState<any | null>(null);
+  const [dyItems, setDyItems] = useState<any[]>([]);
+  const [dySel, setDySel] = useState<string[]>([]);
+  const [dyCursor, setDyCursor] = useState(0);
+  const [dyHasMore, setDyHasMore] = useState(false);
+
   const sources = text.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
   const totalMB = files.reduce((a, f) => a + f.size, 0) / 1024 / 1024;
   const docTotalMB = docFiles.reduce((a, f) => a + f.size, 0) / 1024 / 1024;
@@ -1477,6 +1487,48 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
   function importFavSelected() {
     const list = favSel.map((b) => `https://www.bilibili.com/video/${b}`);
     if (!list.length) return show("请先勾选要导入的视频");
+    submit(false, list);
+  }
+
+  async function loadDyFolders() {
+    setDyLoading(true);
+    try {
+      const r = await api.douyinFavFolders();
+      if (!r.ok) throw new Error(r.error?.message || "读取失败");
+      setDyUser(r.user || "");
+      setDyFolders(r.folders || []);
+      if (!(r.folders || []).length) show("该账号没有收藏夹");
+    } catch (e: any) {
+      show("读取抖音收藏夹失败: " + e.message);
+    } finally {
+      setDyLoading(false);
+    }
+  }
+
+  async function openDyFolder(f: any, cursor = 0) {
+    setDyActiveFolder(f);
+    setDyLoading(true);
+    try {
+      const r = await api.douyinFavItems(String(f.id), cursor);
+      if (!r.ok) throw new Error(r.error?.message || "读取失败");
+      setDyItems(cursor === 0 ? r.items : [...dyItems, ...r.items]);
+      setDyCursor(r.cursor || 0);
+      setDyHasMore(!!r.has_more);
+    } catch (e: any) {
+      show("读取抖音收藏夹内容失败: " + e.message);
+    } finally {
+      setDyLoading(false);
+    }
+  }
+
+  function toggleDyItem(awemeId: string) {
+    setDySel((prev) => (prev.includes(awemeId) ? prev.filter((x) => x !== awemeId) : [...prev, awemeId]));
+  }
+
+  function importDySelected() {
+    const list = dySel.map((id) => `https://www.douyin.com/video/${id}`);
+    if (!list.length) return show("请先勾选要导入的视频");
+    if (list.length > 20) return show("单次最多 20 条，请分批导入");
     submit(false, list);
   }
 
@@ -1637,7 +1689,7 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
         )}
 
         <button className="im-adv-toggle" onClick={() => setAdvOpen((v) => !v)}>
-          {advOpen ? "▾" : "▸"} 更多选项（清晰度 / 后台执行 / 识别与标点 / B站收藏夹）
+          {advOpen ? "▾" : "▸"} 更多选项（清晰度 / 后台执行 / 识别与标点 / B站收藏夹 / 抖音收藏）
         </button>
 
         {advOpen && (
@@ -1704,6 +1756,58 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
                 {favHasMore && (
                   <button className="chip" disabled={favLoading} onClick={() => openFolder(activeFolder, favPage + 1)}>
                     {favLoading ? "加载中…" : "加载更多"}
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div className="im-divider">从抖音收藏导入</div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <button className="btn" onClick={loadDyFolders} disabled={busy || dyLoading}>
+                {dyLoading ? <span className="spin" /> : "读取我的抖音收藏"}
+              </button>
+              {dyUser && <span className="meta">已登录：{dyUser}</span>}
+              <span className="meta" style={{ marginLeft: "auto" }}>
+                需要先登录抖音？
+                <button className="linkbtn" style={{ marginLeft: 4 }}
+                  onClick={() => window.dispatchEvent(new CustomEvent("vl:open-settings"))}>
+                  去设置
+                </button>
+              </span>
+            </div>
+            {dyFolders.length > 0 && (
+              <div className="chiprow" style={{ marginTop: 8 }}>
+                {dyFolders.map((f) => (
+                  <button key={f.id} className={"chip" + (dyActiveFolder?.id === f.id ? " active" : "")}
+                    onClick={() => { setDySel([]); openDyFolder(f, 0); }}>
+                    {f.title} <b>{f.count ?? 0}</b>
+                  </button>
+                ))}
+              </div>
+            )}
+            {dyActiveFolder && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
+                  <span className="meta">共 {dyActiveFolder.count ?? dyItems.length} 个 · 已选 {dySel.length}</span>
+                  <button className="chip" onClick={() => setDySel(dyItems.slice(0, 20).map((x) => x.aweme_id))}>全选本页</button>
+                  <button className="chip" onClick={() => setDySel([])}>清空</button>
+                  <button className="btn soft" disabled={busy || !dySel.length} onClick={importDySelected}>
+                    导入选中（{dySel.length}）
+                  </button>
+                </div>
+                <div style={{ maxHeight: 180, overflowY: "auto" }}>
+                  {dyItems.map((it) => (
+                    <label key={it.aweme_id} className="checkline" title={it.title}>
+                      <input type="checkbox" checked={dySel.includes(it.aweme_id)} disabled={busy} onChange={() => toggleDyItem(it.aweme_id)} />
+                      <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.title}</span>
+                      <span className="meta" style={{ marginLeft: 8 }}>{it.author ? it.author + " · " : ""}{fmtTime(it.duration_ms || 0)}</span>
+                    </label>
+                  ))}
+                  {dyItems.length === 0 && <div className="muted" style={{ padding: "6px 0" }}>该收藏夹为空</div>}
+                </div>
+                {dyHasMore && (
+                  <button className="chip" disabled={dyLoading} onClick={() => openDyFolder(dyActiveFolder, dyCursor)}>
+                    {dyLoading ? "加载中…" : "加载更多"}
                   </button>
                 )}
               </div>
