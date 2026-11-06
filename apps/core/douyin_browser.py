@@ -348,19 +348,157 @@ async def fetch_collect_videos(collects_id: str, *, cursor: int = 0, count: int 
                                profile_dir: str | None = None,
                                cookies: dict[str, str] | None = None,
                                timeout_ms: int = 30000) -> dict:
-    """打开某个收藏夹页面，拦截 collects/video/list 响应，返回 {items, has_more, cursor}。"""
+    """打开某个收藏夹页面，滚动触发 collects/video/list 分页，返回指定页的
+    {items, has_more, cursor}。
+
+    抖音该接口需 a_bogus 运行时签名，无法裸 HTTP 指定 cursor 拉取；页面只在
+    滚动到底部时才加载下一页。所以这里以 ``cursor`` 作为**页码游标**（0 起）：
+    打开收藏夹后，逐页滚动触发「下一页」请求，截获第 ``cursor`` 页（即第
+    cursor+1 次响应），返回该页内容，并把下一页页码作为新的 cursor 回传。
+    ``count`` 仅作为接口分页提示，实际以抖音返回的页大小为准。
+    """
+    # 兼容旧约定的游标：老版本可能回传抖音原始 max_cursor（时间戳量级），
+    # 无法作为页码时回退到第一页，避免把毫秒时间戳当成上千页去滚动。
+    page_index = int(cursor) if isinstance(cursor, int) and 0 <= int(cursor) <= 1000 else 0
     url = (f"https://www.douyin.com/user/self?showTab=collect"
            f"&collects_id={collects_id}")
-    captured: dict = {}
-    await _open_collect_page(
-        _COLLECTS_VIDEO_API, url, captured,
+    pages = await _open_collect_videos_pages(
+        url, page_index,
         browser_path=browser_path, profile_dir=profile_dir,
         cookies=cookies, timeout_ms=timeout_ms)
-    payload = captured.get("videos")
-    if payload is None:
+    if not pages:
         raise DouyinResolveError(
             "need_login", "未读取到收藏夹内容：请先登录抖音，或稍后重试（可能被风控）")
-    return _parse_collect_videos(payload)
+    # 目标页未到达（翻到末尾）时返回空页，避免重复返回首页导致重复追加。
+    if page_index >= len(pages):
+        return {"items": [], "has_more": False, "cursor": page_index}
+    result = _parse_collect_videos(pages[page_index])
+    # 是否还有下一页：要么已截获到更后面的页，要么本页 has_more 仍为真但还没截到后续页。
+    has_more = len(pages) > page_index + 1 or bool(result.get("has_more"))
+    result["has_more"] = has_more
+    result["cursor"] = page_index + 1
+    return result
+
+
+async def _open_collect_videos_pages(page_url: str, need_index: int, *,
+                                     browser_path: str | None, profile_dir: str | None,
+                                     cookies: dict[str, str] | None,
+                                     timeout_ms: int) -> list[dict]:
+    """打开收藏夹页面，滚动触发 collects/video/list，按出现顺序返回各页 JSON。
+
+    截获到第 ``need_index`` 页之后再尝试多截一页，用于判断是否还有下一页；
+    遇到 ``has_more`` 为假或滚动无新响应即停止。返回的列表第 0 项为首屏。
+    """
+    if not playwright_available():
+        raise DouyinResolveError("internal", "未安装 playwright")
+    ensure_playwright_temp()
+    from playwright.async_api import async_playwright
+
+    pages: list[dict] = []
+
+    def _append(data: dict) -> None:
+        # 同一页可能被重复触发（例如视图重绘），按 signature 去重，避免虚增页数。
+        sig = (data.get("cursor"), data.get("has_more"),
+               tuple((a or {}).get("aweme_id") for a in (data.get("aweme_list") or [])[:3]))
+        for existing in pages:
+            esig = (existing.get("cursor"), existing.get("has_more"),
+                    tuple((a or {}).get("aweme_id")
+                          for a in (existing.get("aweme_list") or [])[:3]))
+            if sig == esig and sig[2]:
+                return
+        pages.append(data)
+
+    async with async_playwright() as p:
+        launch_options = {"headless": True,
+                          "args": ["--disable-blink-features=AutomationControlled",
+                                   "--disable-dev-shm-usage"]}
+        ctx_options = {"user_agent": UA, "viewport": {"width": 1280, "height": 900},
+                       "locale": "zh-CN"}
+        bp = browser_path or find_chrome()
+        if bp:
+            launch_options["executable_path"] = bp
+        browser = None
+        try:
+            if profile_dir:
+                Path(profile_dir).mkdir(parents=True, exist_ok=True)
+                ctx = await p.chromium.launch_persistent_context(
+                    str(profile_dir), **launch_options, **ctx_options)
+            else:
+                browser = await p.chromium.launch(**launch_options)
+                ctx = await browser.new_context(**ctx_options)
+        except Exception as e:  # noqa: BLE001
+            raise DouyinResolveError("internal", f"启动浏览器失败：{str(e)[:120]}")
+        if cookies:
+            try:
+                await ctx.add_cookies([
+                    {"name": k, "value": v, "domain": ".douyin.com", "path": "/"}
+                    for k, v in cookies.items() if k and v
+                ])
+            except Exception:
+                pass
+        page = await ctx.new_page() if not ctx.pages else ctx.pages[0]
+
+        async def on_resp(resp):
+            u = resp.url
+            if _COLLECTS_VIDEO_API not in u:
+                return
+            try:
+                if "json" not in (resp.headers.get("content-type", "") or ""):
+                    return
+                txt = await resp.text()
+                if not txt or len(txt) < 20:
+                    return
+                data = json.loads(txt)
+                if isinstance(data, dict):
+                    _append(data)
+            except Exception:
+                pass
+
+        page.on("response", on_resp)
+        try:
+            await page.goto(page_url, wait_until="domcontentloaded", timeout=timeout_ms)
+        except Exception:
+            pass
+        steps = max(1, timeout_ms // 300)
+        # 等待首屏
+        for _ in range(steps):
+            if pages:
+                break
+            await asyncio.sleep(0.3)
+        # 逐页滚动直到到达 need_index 页（再多截一页判断 has_more）或到达末尾
+        max_scrolls = max(need_index + 2, 3)
+        for _ in range(max_scrolls):
+            if len(pages) > need_index:
+                # 已到达目标页；若末页 has_more 为假则无需继续
+                if not bool((pages[-1] or {}).get("has_more")):
+                    break
+                if len(pages) > need_index + 1:
+                    break
+            before = len(pages)
+            try:
+                await page.evaluate(
+                    "() => { const el = document.scrollingElement || document.documentElement;"
+                    " window.scrollTo(0, el.scrollHeight);"
+                    " window.dispatchEvent(new Event('scroll')); }")
+            except Exception:
+                pass
+            # 等新页响应（最多约 steps*0.3s）
+            for _ in range(max(1, steps // 2)):
+                await asyncio.sleep(0.3)
+                if len(pages) > before:
+                    break
+            if len(pages) == before:
+                # 滚动后没有新响应：视为已到末尾
+                if len(pages) > need_index:
+                    break
+                break
+        try:
+            await ctx.close()
+            if browser is not None:
+                await browser.close()
+        except Exception:
+            pass
+    return pages
 
 
 async def _open_collect_page(api_keyword: str, page_url: str, captured: dict, *,
