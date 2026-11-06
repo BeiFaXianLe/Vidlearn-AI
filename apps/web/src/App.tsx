@@ -1511,9 +1511,22 @@ function ImportModal({ onClose, onDone, show }: { onClose: () => void; onDone: (
     try {
       const r = await api.douyinFavItems(String(f.id), cursor);
       if (!r.ok) throw new Error(r.error?.message || "读取失败");
-      setDyItems(cursor === 0 ? r.items : [...dyItems, ...r.items]);
-      setDyCursor(r.cursor || 0);
-      setDyHasMore(!!r.has_more);
+      const fresh: any[] = Array.isArray(r.items) ? r.items : [];
+      setDyItems((prev) => {
+        const base = cursor === 0 ? [] : prev;
+        const seen = new Set(base.map((x) => x.aweme_id));
+        const merged = [...base];
+        for (const it of fresh) {
+          if (it && it.aweme_id && !seen.has(it.aweme_id)) {
+            seen.add(it.aweme_id);
+            merged.push(it);
+          }
+        }
+        return merged;
+      });
+      setDyCursor(cursor === 0 ? (r.cursor || 0) : (r.cursor || cursor + 1));
+      // 空页或无可追加内容视为没有更多，避免「加载更多」原地打转。
+      setDyHasMore(!!r.has_more && fresh.length > 0);
     } catch (e: any) {
       show("读取抖音收藏夹内容失败: " + e.message);
     } finally {

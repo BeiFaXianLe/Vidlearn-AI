@@ -66,6 +66,89 @@ def test_parse_collect_videos_empty():
     assert r["items"] == [] and r["has_more"] is False
 
 
+# ---------------- 分页（fetch_collect_videos） ----------------
+def _vpage(*ids, has_more=True, cursor=0):
+    return {
+        "has_more": has_more,
+        "cursor": cursor,
+        "aweme_list": [
+            {"aweme_id": i, "desc": f"视频{i}", "author": {"nickname": "A"},
+             "video": {"duration": 1000}}
+            for i in ids
+        ],
+    }
+
+
+@pytest.mark.asyncio
+async def test_fetch_collect_videos_page0(monkeypatch):
+    monkeypatch.setattr(douyin_browser, "playwright_available", lambda: True)
+
+    async def fake_pages(url, need_index, **kw):
+        return [_vpage("1", "2", has_more=True), _vpage("3", "4", has_more=False)]
+
+    monkeypatch.setattr(douyin_browser, "_open_collect_videos_pages", fake_pages)
+    r = await douyin_browser.fetch_collect_videos("999", cursor=0)
+    assert [it["aweme_id"] for it in r["items"]] == ["1", "2"]
+    assert r["cursor"] == 1
+    assert r["has_more"] is True
+
+
+@pytest.mark.asyncio
+async def test_fetch_collect_videos_page1(monkeypatch):
+    monkeypatch.setattr(douyin_browser, "playwright_available", lambda: True)
+
+    async def fake_pages(url, need_index, **kw):
+        # need_index=1 → 会滚动到第 2 页
+        assert need_index == 1
+        return [_vpage("1", "2", has_more=True), _vpage("3", "4", has_more=False)]
+
+    monkeypatch.setattr(douyin_browser, "_open_collect_videos_pages", fake_pages)
+    r = await douyin_browser.fetch_collect_videos("999", cursor=1)
+    assert [it["aweme_id"] for it in r["items"]] == ["3", "4"]
+    assert r["cursor"] == 2
+    assert r["has_more"] is False
+
+
+@pytest.mark.asyncio
+async def test_fetch_collect_videos_out_of_range_returns_empty(monkeypatch):
+    monkeypatch.setattr(douyin_browser, "playwright_available", lambda: True)
+
+    async def fake_pages(url, need_index, **kw):
+        return [_vpage("1", has_more=False)]
+
+    monkeypatch.setattr(douyin_browser, "_open_collect_videos_pages", fake_pages)
+    r = await douyin_browser.fetch_collect_videos("999", cursor=5)
+    assert r["items"] == [] and r["has_more"] is False
+
+
+@pytest.mark.asyncio
+async def test_fetch_collect_videos_has_more_via_next_page(monkeypatch):
+    """本页 has_more 缺失但已截获后续页时仍应报告 has_more=True。"""
+    monkeypatch.setattr(douyin_browser, "playwright_available", lambda: True)
+
+    async def fake_pages(url, need_index, **kw):
+        return [{"aweme_list": [{"aweme_id": "1"}]},   # 无 has_more 字段
+                {"aweme_list": [{"aweme_id": "2"}]}]
+
+    monkeypatch.setattr(douyin_browser, "_open_collect_videos_pages", fake_pages)
+    r = await douyin_browser.fetch_collect_videos("999", cursor=0)
+    assert r["has_more"] is True
+    assert r["cursor"] == 1
+
+
+@pytest.mark.asyncio
+async def test_fetch_collect_videos_need_login(monkeypatch):
+    monkeypatch.setattr(douyin_browser, "playwright_available", lambda: True)
+
+    async def fake_pages(url, need_index, **kw):
+        return []
+
+    monkeypatch.setattr(douyin_browser, "_open_collect_videos_pages", fake_pages)
+    with pytest.raises(douyin_browser.DouyinResolveError) as ei:
+        await douyin_browser.fetch_collect_videos("999")
+    assert ei.value.kind == "need_login"
+
+
 # ---------------- 适配器层 ----------------
 class _FakeCookieProvider:
     def __init__(self, cookies):
